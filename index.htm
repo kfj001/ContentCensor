@@ -1,0 +1,141 @@
+<!DOCTYPE HTML>
+<html>
+	<title>Content Censor</title>
+	<head>
+		<script type="text/javascript" src="jquery-2.1.1.js"></script>
+		<style type="text/css">
+			#main {
+				width: 400px;
+			}
+			#main img {
+				float: left;
+			}
+			.small {
+				font-style: italic;
+				clear: both;
+				margin-top: 10px;
+			}
+			#termsArea {
+				width: 99%;
+				margin: 0 auto;
+				clear: both;
+			}
+			#termsArea table {
+				border: solid 1px;
+				border-collapse: collapse;
+			}
+			#termsArea table th {
+				border: 2px solid;
+			}
+			#termsArea td {
+				text-align: center;
+				border: solid 1px;
+			}
+			#buttons {
+				float: right;
+				padding: 5px;
+				margin: 5px;
+			}
+			#buttons * {
+				margin: 2px;
+			}
+		</style>
+	</head>
+	<body>
+		<div id="main">
+			<img src="contentcensor48.png"/>
+			<p style="margin-left:50px;">
+				Content Censor will replace these terms on your webpages with what's specified here. If you don't want a replacement,
+				just leave the fields empty, and Content Censor will stop replacing that term.
+			</p>
+			<p class="small">
+				Remember to reload any pages you are reading to see changes!
+			</p>
+		</div>
+		<div id="termsArea">
+			<table>
+				<thead>
+					<tr>
+						<th>Term</th>
+						<th>Replace With</th>
+						<th>Case Insensitive?</th>
+					</tr>
+				</thead>
+				<tbody>
+					<tr>
+						<td>
+						<input type="text" class="findField"/>
+						</td>
+						<td>
+						<input type="text" class="replaceField"/>
+						</td>
+						<td>
+						<input type="checkbox" />
+						</td>
+					</tr>
+					<tr>
+						<td>
+						<input type="text" class="findField"/>
+						</td>
+						<td>
+						<input type="text" class="replaceField"/>
+						</td>
+						<td>
+						<input type="checkbox" />
+						</td>
+					</tr>
+					<tr>
+						<td>
+						<input type="text" class="findField"/>
+						</td>
+						<td>
+						<input type="text" class="replaceField"/>
+						</td>
+						<td>
+						<input type="checkbox" />
+						</td>
+					</tr>
+					<tr>
+						<td>
+						<input type="text" class="findField"/>
+						</td>
+						<td>
+						<input type="text" class="replaceField"/>
+						</td>
+						<td>
+						<input type="checkbox" />
+						</td>
+					</tr>
+					<tr>
+						<td>
+						<input type="text" class="findField"/>
+						</td>
+						<td>
+						<input type="text" class="replaceField"/>
+						</td>
+						<td>
+						<input type="checkbox" />
+						</td>
+					</tr>
+					<tr>
+						<td>
+						<input type="text" class="findField"/>
+						</td>
+						<td>
+						<input type="text" class="replaceField"/>
+						</td>
+						<td>
+						<input type="checkbox" />
+						</td>
+					</tr>
+				</tbody>
+			</table>
+		</div>
+		<div id="buttons">
+			<button id="saveButton">
+				Save
+			</button>
+		</div>
+		<script type="text/javascript" src="index.js"></script>
+	</body>
+</html>
