@@ -30,8 +30,9 @@ chrome.storage.sync.get("contentCensorData", function(items) {
 		return this.replace;
 	});
 
-	$(document).on("body div").bind("DOMSubtreeModified", function() {
-		replacementFn(document.body);
-	});
-	//replacementFn(document.body);
+	if (toReplace.length > 0){
+  	$(document).on("body *").bind("DOMSubtreeModified", function() {
+		  replacementFn(arguments[0].target);
+	  });
+	}
 });

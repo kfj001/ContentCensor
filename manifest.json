@@ -2,10 +2,10 @@
 	"manifest_version": 2,
 
 	"name": "Content Censor",
-	"author": "Kyle Jacobs",
+	"author": "Content Censor Developer",
 
 	"description": "Changes web pages with unpleasant things to less unpleasant things in the most childish manner imaginable.",
-	"version": "2.0",
+	"version": "2.0.1",
 
 	"icons": {
 		"48": "contentcensor48.png",
