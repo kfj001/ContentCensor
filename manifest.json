@@ -5,7 +5,7 @@
 	"author": "Content Censor Developer",
 
 	"description": "Changes web pages with unpleasant things to less unpleasant things in the most childish manner imaginable.",
-	"version": "2.0.1",
+	"version": "2.0.2",
 
 	"icons": {
 		"48": "contentcensor48.png",
@@ -22,7 +22,7 @@
 	"content_scripts": [
 		{
 			"matches": ["http://*/*", "https://*/*"],
-			"js": ["jquery-2.1.1.js", "jquery.ba-replacetext.js", "popup.js"]
+			"js": ["jquery-2.1.4.min.js", "popup.js"]
 		}
 	],
 	"permissions": ["storage"]

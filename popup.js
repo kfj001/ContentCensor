@@ -1,23 +1,58 @@
-// This script will need to be refactored into multple counterparts.
-// 1. A "lifetime" page, where registration will occur and retreive/create the values in the
-// arrays. and 2. the script you see here that is executed on page views.
-
-// SEE: Event pages in chrome extensions
-
-// var toReplace = ['republican', 'tea party', /iPhone/gi, 'Republican', 'Tea Party', 'GOP'],
-// replaceWith = ['pervert', 'rape philosophy party', 'Abortion', 'Pervert', 'Rape Philosophy Party', 'CUNT'];
 var toReplace = [];
 var replaceWith = [];
+var validElements = ["tt",
+"i",
+"b",
+"big",
+"small",
+"em",
+"strong",
+"dfn",
+"code",
+"samp",
+"kbd",
+"var",
+"cite",
+"abbr",
+"acronym",
+"sub",
+"sup",
+"span",
+"bdo",
+"address",
+"div",
+"a",
+"p",
+"h1", "h2", "h3", "h4", "h5", "h6",
+"pre",
+"q",
+"ins",
+"del",
+"dt",
+"dd",
+"li",
+"label",
+"option",
+"textarea",
+"fieldset",
+"legend",
+"button",
+"caption",
+"td",
+"th"];
+var mutationObserver;
 
 var replacementFn = function(parent) {
-	if (parent.nodeType === parent.TEXT_NODE) {
-		for (var i = 0; i < toReplace.length; i++) {
-			parent.textContent = parent.textContent.replace(toReplace[i], replaceWith[i]);
-		}
-	} else {
-		for (var i = 0; i < parent.childNodes.length; i++) {
-			replacementFn(parent.childNodes[i]);
-		}
+	var i;
+	for (i = 0; i < parent.childNodes.length; i++) {
+		replacementFn(parent.childNodes[i]);
+	}
+	if (parent.nodeType === parent.TEXT_NODE && validElements.indexOf(parent.parentElement.nodeName.toLowerCase()) > -1) {
+  	for (i = 0; i < toReplace.length; i++) {
+  	    if (parent) {
+  			  parent.textContent = parent.textContent.replace(toReplace[i], replaceWith[i]);
+  	    }
+  	}
 	}
 };
 
@@ -30,9 +65,13 @@ chrome.storage.sync.get("contentCensorData", function(items) {
 		return this.replace;
 	});
 
-	if (toReplace.length > 0){
-  	$(document).on("body *").bind("DOMSubtreeModified", function() {
-		  replacementFn(arguments[0].target);
-	  });
-	}
+  mutationObserver = new MutationObserver(function(mutations){
+    mutations.forEach(function(mutation){
+      // if (validElements.indexOf(mutation.target.tagName.toLowerCase()) > -1){
+        replacementFn(mutation.target);
+      // }
+    });
+  });
+  	
+  mutationObserver.observe(document.body, {childList: true, subtree: true, characterData: true});
 });

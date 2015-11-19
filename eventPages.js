@@ -1,4 +1,4 @@
-var eventPages = ( function() {
+var eventPages = (function() {
 		var that = {};
 		var initFn = function() {
 			chrome.storage.sync.get("contentCensorData", function(item) {
