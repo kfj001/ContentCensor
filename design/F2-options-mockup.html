@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Content Censor — F-2 Options page (ruleset manager)</title>
+<link rel="stylesheet" href="CC-design-tokens.css">
+<style>
+   /* F-2 options page. Surface: CONFIGURE (+ OPERATE). This is the redesign of index.htm/index.js.
+      One row = one rule; one concern per control; honest labels (fixes defect #1, the isRegex/"Case
+      Insensitive" mismatch). The whole page is ONE delegated click + ONE delegated change listener
+      (§4.3 "≤2 listeners"). No jQuery, no parallel arrays. */
+
+   body { background: var(--surface); }
+   .page { width: 100%; max-width: var(--options-w); margin: 0 auto; padding: var(--sp-5) var(--sp-4); }
+   .page__head { display:flex; align-items:flex-start; gap: var(--sp-3); margin-bottom: var(--sp-2); }
+   .page__logo { width:30px; height:30px; border-radius:7px; background:var(--ink); color:#fff;
+     display:grid; place-items:center; font-weight:700; flex:0 0 auto; }
+   .page__title { margin:0; font-size: var(--fs-xl); }
+   .page__sub { color: var(--muted); font-size: var(--fs-sm); margin-top:2px; }
+   .page__spacer { flex:1 1 auto; }
+
+   /* Master switch (profile-wide `enabled`) + seed notice */
+   .toolbar {
+    display:flex; align-items:center; gap: var(--sp-3); flex-wrap:wrap;
+    background:#fff; border:1px solid var(--border); border-radius: var(--radius);
+    padding: var(--sp-3); margin-bottom: var(--sp-4);
+   }
+   .toolbar__label { font-weight:600; font-size: var(--fs-sm); color: var(--ink-2); }
+   .switch {
+     --w:44px; --h:26px; width:var(--w); height:var(--h); border-radius:999px;
+     border:1px solid var(--border-2); background:var(--surface-2); position:relative;
+     cursor:pointer; padding:0; flex:0 0 auto; transition: background var(--dur-fast) var(--ease);
+   }
+   .switch[aria-checked="true"] { background: var(--accent); border-color: var(--accent); }
+   .switch__thumb { position:absolute; top:2px; left:2px; width:20px; height:20px; border-radius:50%;
+     background:#fff; box-shadow:var(--shadow-1); transition: transform var(--dur-fast) var(--ease); }
+   .switch[aria-checked="true"] .switch__thumb { transform: translateX(18px); }
+   .toolbar__hint { margin-left:auto; color: var(--muted); font-size: var(--fs-sm); }
+   .seed-line { font-size: var(--fs-sm); color: var(--ink-2);
+     background: color-mix(in srgb, var(--focus) 8%, #fff);
+     border:1px solid color-mix(in srgb, var(--focus) 26%, #fff);
+     border-radius: var(--radius-sm); padding: var(--sp-1) var(--sp-2); }
+
+   /* Ruleset: role=list of self-describing <li> rows (decision §3.3 / §4.2).
+      Chosen over role=grid: a grid implies arrow-key cell navigation we don't implement; a per-row
+      group is clearer for a screen reader. (A2/A9 — landmarks + labels, not color.) */
+   .ruleset { list-style:none; margin:0 0 var(--sp-3); padding:0; display:grid; gap: var(--sp-2); }
+
+   /* ── <cc-rule-row> ── internal DOM per §4.2 ── */
+   cc-rule-row {
+     display:grid; grid-template-columns: 34px 1fr; gap: var(--sp-3);
+     background:#fff; border:1px solid var(--border); border-radius: var(--radius);
+     padding: var(--sp-3); align-items:start;
+   }
+   cc-rule-row[disabled] { background: var(--surface); opacity:.72; }
+   .row__idx { position:relative; width:34px; height:34px; border-radius:50%;
+     display:grid; place-items:center; }
+   .row__idx .row__num { font-size: var(--fs-sm); font-weight:700; color:var(--muted); }
+   /* per-row enable toggle (leading). role=switch (A3). */
+   .row__enable {
+     position:absolute; width:34px; height:34px; border-radius:50%; border:none; background:transparent;
+     cursor:pointer; padding:0;
+   }
+   .row__enable::after { content:""; position:absolute; inset:6px; border-radius:50%;
+     background:var(--surface-2); border:1px solid var(--border-2); transition: all var(--dur-fast) var(--ease); }
+   .row__enable[aria-checked="true"]::after { background:var(--accent); border-color:var(--accent); }
+   .row__enable[aria-checked="true"] { box-shadow: 0 0 0 2px color-mix(in srgb,var(--accent) 22%,transparent); }
+
+   .row__body { display:grid; gap: var(--sp-3); min-width:0; }
+   .row__fields { display:grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); }
+   @media (max-width:520px){ .row__fields{ grid-template-columns:1fr; } }
+   .field { display:grid; gap: 4px; }
+   .field__label { font-size: var(--fs-xs); text-transform:uppercase; letter-spacing:.05em;
+     font-weight:700; color: var(--muted); }
+   .field input[type=text]{
+     font:inherit; font-size: var(--fs); padding: var(--sp-2) var(--sp-2);
+     border:1px solid var(--border-2); border-radius: var(--radius-sm); background:#fff; color:var(--ink);
+     width:100%;
+   }
+   .field input[type=text]:focus-visible { outline:none; box-shadow: var(--focus-ring); }
+   /* Visually-hidden "Rule N of M" caption that still reads in AT (A15). */
+   .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden;
+     clip:rect(0 0 0 0); white-space:nowrap; border:0; }
+
+   /* match-type segmented control = role=radiogroup (A1). "Text" | "Regex" (honest, replaces isRegex). */
+   .controls { display:flex; flex-wrap:wrap; align-items:center; gap: var(--sp-3); }
+   .seg-match { display:inline-flex; border:1px solid var(--border-2); border-radius: var(--radius-sm);
+     overflow:hidden; }
+   .seg-match input{ position:absolute; opacity:0; width:0; height:0; }
+   .seg-match label { font-size: var(--fs-sm); padding: var(--sp-1) var(--sp-3); cursor:pointer;
+     color: var(--ink-2); border-right:1px solid var(--border); user-select:none; }
+   .seg-match label:last-of-type { border-right:none; }
+   .seg-match input:checked + label { background: var(--ink); color:#fff; }
+   .seg-match input:focus-visible + label { box-shadow: var(--focus-ring); position:relative; z-index:1; }
+
+   /* "Match case" — a REAL labeled checkbox (not the old mislabeled one). Default off = case-insensitive. */
+   .checkbox { display:inline-flex; align-items:center; gap:6px; font-size: var(--fs-sm); color:var(--ink-2); }
+   .checkbox input { width:16px; height:16px; accent-color: var(--accent); }
+   .checkbox input:focus-visible { outline:none; box-shadow: var(--focus-ring); }
+
+   /* Delete — text button, never a bare icon (A10). */
+   .row__actions { display:flex; justify-content:flex-end; }
+   .btn-icon-del {
+     font:inherit; font-size: var(--fs-sm); font-weight:600; color: var(--danger);
+     background:transparent; border:1px solid transparent; border-radius: var(--radius-sm);
+     padding: var(--sp-1) var(--sp-2); cursor:pointer;
+   }
+   .btn-icon-del:hover { background: color-mix(in srgb,var(--danger) 10%, #fff); border-color: color-mix(in srgb,var(--danger) 30%,#fff); }
+   .btn-icon-del:focus-visible { outline:none; box-shadow: var(--focus-ring); }
+
+   /* Inline regex validation error — role=alert, assertive (A4/A12). */
+   .row__error {
+     display:none; font-size: var(--fs-sm); color: var(--danger); margin-top:2px;
+     align-items:center; gap:6px;
+   }
+   cc-rule-row[aria-invalid="true"] .row__error { display:flex; }
+   cc-rule-row[aria-invalid="true"] .field--find input { border-color: var(--danger); }
+
+   /* Empty state (fixes defect #2). */
+   .empty {
+     text-align:center; padding: var(--sp-6) var(--sp-4); background:#fff;
+     border:1px dashed var(--border-2); border-radius: var(--radius); color: var(--muted);
+   }
+   .empty h3 { margin:0 0 var(--sp-1); color: var(--ink-2); font-size: var(--fs-lg); }
+   .empty p { margin:0 0 var(--sp-3); font-size: var(--fs-sm); }
+
+   /* Footer actions + status region (aria-live). */
+   .footer { display:flex; align-items:center; gap: var(--sp-3); flex-wrap:wrap;
+    margin-top: var(--sp-2); }
+   .btn { font:inherit; font-weight:600; cursor:pointer; border-radius: var(--radius);
+     padding: var(--sp-2) var(--sp-4); border:1px solid transparent;
+     display:inline-flex; align-items:center; gap:6px;
+     transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease); }
+   .btn--primary { background: var(--ink); color:#fff; }
+   .btn--primary:hover:not(:disabled) { background:#000; }
+   .btn--primary:disabled { background: var(--surface-2); color: var(--ink-disabled); cursor:not-allowed; }
+   .btn--add { background:#fff; color:var(--ink); border-color: var(--border-2); }
+   .btn--add:hover { background: var(--surface); }
+   .footer__spacer { flex:1 1 auto; }
+   .kbd { font-family: var(--font-mono); font-size:11px; background: var(--surface-2);
+     border:1px solid var(--border-2); border-radius:4px; padding:1px 5px; color: var(--ink-2); }
+
+   /* Status region — aria-live polite for idle/saved/dirty; role=alert for error (A4). */
+   .status { font-size: var(--fs-sm); display:inline-flex; align-items:center; gap:6px; min-height:18px;
+     color: var(--muted); }
+   .status[data-state="dirty"]  { color: var(--focus); }
+   .status[data-state="saved"]  { color: var(--accent); }
+   .status[data-state="error"]  { color: var(--danger); font-weight:600; }
+   .status__dot { width:8px; height:8px; border-radius:50%; background:currentColor; }
+
+   .demo-bar { max-width: var(--options-w); margin: var(--sp-5) auto 0; padding: 0 var(--sp-4);
+     display:flex; flex-wrap:wrap; gap: var(--sp-2); align-items:center; }
+   .demo-bar__label { font-size: var(--fs-xs); text-transform:uppercase; letter-spacing:.06em;
+     color: var(--muted); font-weight:700; }
+   .seg { display:inline-flex; border:1px solid var(--border-2); border-radius: var(--radius); overflow:hidden; }
+   .seg button { font:inherit; font-size: var(--fs-sm); padding: var(--sp-1) var(--sp-3);
+     border:none; background:#fff; cursor:pointer; color: var(--ink-2); border-right:1px solid var(--border); }
+   .seg button:last-child { border-right:none; }
+   .seg button[aria-pressed="true"] { background: var(--ink); color:#fff; }
+   .caption { max-width: var(--options-w); margin: 0 auto; padding: var(--sp-4);
+     background:#fff; border:1px solid var(--border); border-radius: var(--radius); }
+   .caption h4 { margin:0 0 var(--sp-1); } .caption p,.caption li{ color:var(--ink-2); font-size:var(--fs-sm); }
+   .caption ul{ margin:0; padding-left:var(--sp-3); } code{ font-family:var(--font-mono); font-size:.92em; }
+</style>
+</head>
+<body>
+<!-- DEMO authoring notes live outside <main> so the product surface is unambiguous. -->
+<main class="page" aria-label="Content Censor settings — manage replacement rules">
+
+  <div class="page__head">
+    <span class="page__logo" aria-hidden="true">C</span>
+    <div>
+      <h1 class="page__title">Settings</h1>
+      <p class="page__sub">Replacements are applied on every page you visit.</p>
+    </div>
+    <div class="page__spacer"></div>
+  </div>
+
+  <!-- Master enable + F-5 seed notice. (Q2: add `enabled` — ruleset inert when off.) -->
+  <div class="toolbar" role="group" aria-labelledby="enable-label">
+    <span class="toolbar__label" id="enable-label">Apply replacements</span>
+    <button class="switch" id="masterSwitch" role="switch" aria-checked="true" aria-labelledby="enable-label">
+      <span class="switch__thumb" aria-hidden="true"></span>
+    </button>
+    <span class="toolbar__hint">Off keeps your rules but stops applying them everywhere.</span>
+    <span class="seed-line" id="seedLine" hidden>6 example rules loaded — these are suggestions, not your own. Delete any you don't want.</span>
+  </div>
+
+  <!-- Ruleset: role=list of <li> rows; each <li> hosts one <cc-rule-row>. -->
+  <ul class="ruleset" id="ruleset" role="list" aria-label="Replacement rules">
+    <!-- populated by controller; empty state rendered when state.rows is empty -->
+  </ul>
+
+  <!-- Footer: single delegated click listener handles add/save/delete (≤2 listeners total, §4.3). -->
+  <div class="footer">
+    <button class="btn btn--add" data-action="add">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true">
+        <path d="M12 5v14M5 12h14"/></svg>
+      Add rule
+    </button>
+    <div class="footer__spacer"></div>
+    <span class="status" id="status" data-state="idle" aria-live="polite">
+      <span class="status__dot" aria-hidden="true"></span>
+      <span class="status__text">All changes saved</span>
+    </span>
+    <button class="btn btn--primary" id="saveBtn" data-action="save" disabled>
+      Save
+      <span class="kbd" aria-hidden="true">⌘S</span>
+    </button>
+  </div>
+</main>
+
+<!-- ══ DEMO chrome (not shipped) ══ -->
+<div class="caption" role="note">
+  <h4>F-2 — Options page · editable data-list + add/remove + atomic save</h4>
+  <p>The redesign of <code>index.htm</code>/<code>index.js</code>. Each <code>&lt;cc-rule-row&gt;</code> is a
+  native Custom Element (zero runtime) implementing §4.2. The whole page is driven by
+  <strong>one</strong> delegated <code>click</code> and <strong>one</strong> delegated
+  <code>change</code> listener (§4.3, "≤2 listeners"). State is a single
+  <code>Array&lt;Rule&gt;</code> — no parallel arrays (defect #3).</p>
+  <ul>
+    <li><strong>Honest labels</strong> (fix defect #1): "Match type" = Text/Regex replaces the old "Case Insensitive?" box; "Match case" is a separate real checkbox (off = today's case-insensitive <code>gi</code>).</li>
+    <li><strong>Add/remove + empty state</strong> replace the fixed 6 blank rows (defect #2).</li>
+    <li><strong>Atomic save</strong>: one <code>chrome.storage.sync.set</code>, no <code>clear()</code>; <code>role="alert"</code> on quota/lastError; <code>⌘/Ctrl+S</code> saves; focus returns to the last edited field; empty/invalid rows are dimmed &amp; skipped at save time.</li>
+    <li><strong>a11y</strong>: every text control has a <code>&lt;label for&gt;</code> + a visually-hidden "Rule N of M" caption (A1/A15); validation is <code>role="alert"</code> (A4); Delete is a text button never a bare icon (A10).</li>
+  </ul>
+</div>
+
+<div class="demo-bar" role="group" aria-label="Demo: load a scenario">
+  <span class="demo-bar__label">Load</span>
+  <div class="seg" role="group" aria-label="Scenario">
+    <button data-scn="mixed" aria-pressed="true">Mixed (3 rules)</button>
+    <button data-scn="empty" aria-pressed="false">Empty</button>
+    <button data-scn="fresh" aria-pressed="false">Fresh install</button>
+    <button data-scn="badregex" aria-pressed="false">Invalid regex row</button>
+  </div>
+  <span class="demo-bar__label" style="margin-left:var(--sp-3)">Force save error</span>
+  <div class="seg" role="group" aria-label="Force save error">
+    <button data-err="off" aria-pressed="true">Off</button>
+    <button data-err="quota" aria-pressed="false">Quota</button>
+  </div>
+</div>
+
+<script>
+/* ══════════════════════════════════════════════════════════════════════════════
+   <cc-rule-row> — native Custom Element, §4.2. Zero runtime. Zero third-party import.
+   Inputs (reflecting attrs → state): find, replace, matchType, case-sensitive(bool),
+   disabled(=!enabled).
+   Outputs (custom events, bubbles+composed, detail carries the change):
+     cc-row-change { rowId, changed:{find|replace|matchType|caseSensitive}, value }
+     cc-row-delete { rowId }
+   A11y per instance: real <label for>; role=radiogroup for match type; "Rule N of M" visually-
+   hidden caption; role=alert inline error on invalid regex; :focus-visible on every child.
+   ════════════════════════════════════════════════════════════════════════════ */
+class CCRuleRow extends HTMLElement {
+   connectedCallback(){
+     // stable id for reconciliation (if absent, controller mints it).
+     this._id = this.getAttribute("data-id") || ("r" + Math.random().toString(36).slice(2,8));
+     this.setAttribute("data-id", this._id);
+     this._idx = parseInt(this.getAttribute("data-index") || "0", 10);
+     this._count = parseInt(this.getAttribute("data-count") || "1", 10);
+
+     this._disabled = this.hasAttribute("disabled");
+
+     this.innerHTML =
+`<div class="row__idx">
+     <button type="button" class="row__enable" role="switch"
+       aria-checked="${this._disabled ? "false":"true"}"
+       aria-label="Enable this rule" data-action="toggle-enable"></button>
+     <span class="row__num" aria-hidden="true">${this._idx}</span>
+   </div>
+   <div class="row__body">
+     <p class="sr-only" id="cap-${this._id}">Rule ${this._idx} of ${this._count}</p>
+     <div class="row__fields">
+       <div class="field field--find">
+         <label class="field__label" for="find-${this._id}">Find</label>
+         <input type="text" id="find-${this._id}" data-field="find"
+            aria-describedby="cap-${this._id}" placeholder="e.g. republican"
+            value="${(this.getAttribute("find")||"").replace(/"/g,"&quot;")}">
+       </div>
+       <div class="field field--replace">
+         <label class="field__label" for="replace-${this._id}">Replace with</label>
+         <input type="text" id="replace-${this._id}" data-field="replace"
+            aria-describedby="cap-${this._id}" placeholder="e.g. pervert"
+            value="${(this.getAttribute("replace")||"").replace(/"/g,"&quot;")}">
+       </div>
+     </div>
+     <div class="controls">
+       <div class="seg-match" role="radiogroup" aria-label="Match type">
+         <input type="radio" name="match-${this._id}" id="mtext-${this._id}"
+            data-field="matchType" value="text" ${this.getAttribute("matchType")!=="regex"?"checked":""}>
+         <label for="mtext-${this._id}">Text</label>
+         <input type="radio" name="match-${this._id}" id="mregex-${this._id}"
+            data-field="matchType" value="regex" ${this.getAttribute("matchType")==="regex"?"checked":""}>
+         <label for="mregex-${this._id}">Regex</label>
+       </div>
+       <label class="checkbox">
+         <input type="checkbox" id="case-${this._id}" data-field="caseSensitive"
+            ${this.getAttribute("case-sensitive")==="true"?"checked":""}>
+         <span>Match case</span>
+       </label>
+       <div class="row__actions">
+         <button type="button" class="btn-icon-del" data-action="delete"
+            aria-label="Delete rule ${this._idx}">Delete</button>
+       </div>
+     </div>
+     <p class="row__error" role="alert">
+       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+         <circle cx="12" cy="12" r="9"/><path d="M12 7v5M12 16h.01"/></svg>
+       <span>Invalid regular expression.</span>
+     </p>
+   </div>`;
+
+     // per-instance: one change listener on THIS row → emit cc-row-change (controller delegates
+     // the page-level handling but the row owns its own field→event emission).
+     this._onRowInput = (e) => {
+        var t = e.target;
+        if (!t.dataset || !t.dataset.field) return;
+        var changed;
+        if (t.dataset.field === "matchType")         changed = { matchType: t.value };
+        else if (t.dataset.field === "caseSensitive")changed = { caseSensitive: t.checked };
+        else                                         changed = { [t.dataset.field]: t.value };
+        // validate regex inline (A4/A12 safe-failure, not a hang)
+        if (this._matchType() === "regex") this._validate();
+        this._emit("cc-row-change", { rowId: this._id, changed: changed, value: t.dataset.field==="caseSensitive"?t.checked:t.value });
+     };
+     this._onRowClick = (e) => {
+        var a = e.target.closest("[data-action]");
+        if (!a) return;
+        if (a.dataset.action === "delete") {
+            this._emit("cc-row-delete", { rowId: this._id });
+         } else if (a.dataset.action === "toggle-enable") {
+            var on = a.getAttribute("aria-checked") === "true";
+             a.setAttribute("aria-checked", on ? "false":"true");
+             this.setAttribute("disabled", on ? "true":"");
+            this._disabled = on;
+             this._emit("cc-row-change", { rowId: this._id, changed:{ enabled: !on }, value: !on });
+         }
+     };
+     this.addEventListener("input", this._onRowInput);
+     this.addEventListener("change", this._onRowInput);   // radios/checkbox
+     this.addEventListener("click", this._onRowClick);
+   }
+   disconnectedCallback(){
+     this.removeEventListener("input", this._onRowInput);
+     this.removeEventListener("change", this._onRowInput);
+     this.removeEventListener("click", this._onRowClick);
+   }
+   _matchType(){
+     var el = this.querySelector('input[name="match-'+this._id+']:checked');
+     return el ? el.value : "text";
+   }
+   _validate(){
+    var findEl = this.querySelector('input[data-field="find"]');
+    var bad = false;
+    if (this._matchType() === "regex" && findEl && findEl.value.trim() !== "") {
+        try { new RegExp(findEl.value); } catch(e){ bad = true; }
+      }
+     this.setAttribute("aria-invalid", bad ? "true":"false");
+     return !bad;
+   }
+   serialize(){
+    return {
+      id: this._id,
+      find: this.querySelector('input[data-field="find"]').value,
+     replace: this.querySelector('input[data-field="replace"]').value,
+     matchType: this._matchType(),
+     caseSensitive: this.querySelector('[data-field="caseSensitive"]').checked,
+     enabled: !this._disabled
+   };
+   }
+   _emit(type, detail){ this.dispatchEvent(new CustomEvent(type, { bubbles:true, composed:true, detail })); }
+   // Reconcile after state change (A6: preserve focus where we can).
+   updateMeta(index, count){
+    this.setAttribute("data-index", index); this.setAttribute("data-count", count);
+     this.querySelector(".row__num").textContent = index;
+     this.querySelector("#cap-"+this._id).textContent = "Rule "+index+" of "+count;
+     this.querySelector('[data-action="delete"]').setAttribute("aria-label","Delete rule "+index);
+   }
+   setInvalid(bad){ this.setAttribute("aria-invalid", bad ? "true":"false"); }
+ }
+customElements.define("cc-rule-row", CCRuleRow);
+
+/* ══ Page controller (§4.3): state.rows + render() + ONE delegated click + ONE delegated change ══ */
+(function(){
+  var state = { enabled:true, rows:[], dirty:false, status:"idle" };
+  var forceError = false;
+  var ruleset = document.getElementById("ruleset");
+  var saveBtn = document.getElementById("saveBtn");
+  var statusEl = document.getElementById("status");
+  var statusText = statusEl.querySelector(".status__text");
+  var masterSwitch = document.getElementById("masterSwitch");
+  var seedLine = document.getElementById("seedLine");
+
+  function uid(){ return "r" + Math.random().toString(36).slice(2,9); }
+
+  function render(){
+    ruleset.innerHTML = "";
+   if (!state.rows.length) {
+      var li = document.createElement("li");
+       li.innerHTML = '<div class="empty"><h3>No rules yet</h3>'+
+         '<p>Add your first replacement. It will apply to text on every page you visit.</p>'+
+         '<button class="btn btn--primary" type="button" data-action="add">Add your first rule</button></div>';
+       ruleset.appendChild(li);
+    } else {
+      var n = state.rows.length;
+      state.rows.forEach(function(r, i){
+        var li = document.createElement("li");
+         var row = document.createElement("cc-rule-row");
+         row.setAttribute("data-id", r.id);
+         row.setAttribute("find", r.find||"");
+         row.setAttribute("replace", r.replace||"");
+         row.setAttribute("matchType", r.matchType||"text");
+         row.setAttribute("case-sensitive", r.caseSensitive ? "true":"false");
+        if (!r.enabled) row.setAttribute("disabled","");
+         row.setAttribute("data-index", i+1);
+         row.setAttribute("data-count", n);
+         li.appendChild(row);
+         ruleset.appendChild(li);
+       });
+     }
+     status();
+  }
+
+  function status(){
+    statusEl.dataset.state = state.status;
+    var t;
+    switch(state.status){
+      case "saving": t = "Saving…"; break;
+      case "saved":  t = "All changes saved"; break;
+      case "error":  t = (forceError ? "Couldn't save — storage quota exceeded. Remove a rule and retry." : "Save failed. Try again."); break;
+      case "dirty":  t = "You have unsaved changes"; break;
+      default:       t = state.dirty ? "You have unsaved changes" : "All changes saved";
+    }
+    statusText.textContent = t;
+    // Save disabled until dirty (dirty-state, §3.3) AND not mid-save.
+    saveBtn.disabled = (state.status === "idle" || state.status === "saved") && !state.dirty
+                      ? true
+                      : (state.status === "saving");
+    if (state.status === "error") statusEl.setAttribute("role","alert");
+    else if (statusEl.getAttribute("role") === "alert") statusEl.removeAttribute("role");
+  }
+
+  /* ── ONE delegated click listener for the entire surface (§4.3, ≤2 listeners) ── */
+  document.addEventListener("click", function(e){
+    var t = e.target.closest("[data-action]");
+    if (!t) return;
+    var act = t.dataset.action;
+    if (act === "add") {
+       state.rows.push({ id: uid(), find:"", replace:"", matchType:"text", caseSensitive:false, enabled:true });
+       state.dirty = true; state.status = "dirty";
+       render();
+       var rows = ruleset.querySelectorAll("cc-rule-row");
+       var last = rows[rows.length-1];
+       if (last){ var f = last.querySelector('input[data-field="find"]'); f && f.focus(); }
+    } else if (act === "save") {
+        doSave();
+    }
+    // delete is handled by <cc-row-row> emitting cc-row-delete; see the delegated change path below.
+  });
+
+  /* ── ONE delegated listener for cc-row-change / cc-row-delete (event model is the contract) ── */
+  document.addEventListener("cc-row-change", function(e){
+    var d = e.detail;
+    var r = state.rows.find(function(x){ return x.id === d.rowId; });
+    if (!r) return;
+    Object.assign(r, d.changed);
+    state.dirty = true; state.status = "dirty";
+    status();
+  });
+  document.addEventListener("cc-row-delete", function(e){
+    var id = e.detail.rowId;
+    state.rows = state.rows.filter(function(x){ return x.id !== id; });
+    state.dirty = true; state.status = "dirty";
+    render();
+  });
+
+  // master switch
+  masterSwitch.addEventListener("click", function(){
+    var on = masterSwitch.getAttribute("aria-checked") === "true";
+     masterSwitch.setAttribute("aria-checked", on ? "false":"true");
+     state.enabled = !on; state.dirty = true; state.status = "dirty";
+     status();
+  });
+
+  // Ctrl/Cmd+S → save (A5), with storage guard so an explicit save isn't lost.
+  document.addEventListener("keydown", function(e){
+    if ((e.metaKey || e.ctrlKey) && (e.key === "s")) { e.preventDefault(); if (!saveBtn.disabled) doSave(); }
+  });
+  window.addEventListener("beforeunload", function(ev){
+    if (state.dirty){ ev.preventDefault(); ev.returnValue = "You have unsaved changes."; }
+  });
+
+  function doSave(){
+    state.status = "saving"; status();
+    // Atomic single call. No clear() (MV3 Phase 0.2). Skip empty finds (dim + skip, defect #2).
+    var toSave = state.rows.filter(function(r){
+      if (!r.enabled) return false;
+      if (!r.find.trim()) return false;
+      if (r.matchType === "regex"){ try{ new RegExp(r.find); }catch(e){ return false; } }
+      return true;
+    }).map(function(r){ return { find:r.find, replace:r.replace, matchType:r.matchType, caseSensitive:r.caseSensitive }; });
+
+    // Production: chrome.storage.sync.set({ contentCensorData: toSave, updatedAt: Date.now(), enabled: state.enabled }, cb)
+    setTimeout(function(){  // stand-in for the async storage round-trip
+      if (forceError){
+        state.status = "error"; status();
+        // focus error via the alert; keep dirty=true so the user can retry (A6)
+        statusEl.focus && statusEl.focus();
+        return;
+      }
+      state.status = "saved"; state.dirty = false; status();
+      seedLine.hidden = true;  // suggestions acknowledged
+    }, 250);
+  }
+
+  /* ── Scenarios (demo fixtures; production loads from chrome.storage.sync.get) ── */
+  var SCEN = {
+    mixed: [
+      { id:uid(), find:"republican",  replace:"pervert",  matchType:"text",  caseSensitive:false, enabled:true },
+      { id:uid(), find:"tea party",   replace:"pervert",  matchType:"text",  caseSensitive:false, enabled:true },
+      { id:uid(), find:"\\biPhone\\b",replace:"Abortion", matchType:"regex", caseSensitive:false, enabled:true }
+    ],
+    empty: [],
+    fresh: [
+      { id:uid(), find:"republican",  replace:"pervert",  matchType:"text",  caseSensitive:false, enabled:true },
+      { id:uid(), find:"tea party",   replace:"pervert",  matchType:"text",  caseSensitive:false, enabled:true },
+      { id:uid(), find:"iPhone",      replace:"Abortion", matchType:"regex", caseSensitive:false, enabled:true },
+      { id:uid(), find:"Republican",  replace:"Pervert",  matchType:"text",  caseSensitive:false, enabled:true },
+      { id:uid(), find:"Tea Party",   replace:"Rape Philosophy Party", matchType:"text", caseSensitive:false, enabled:true },
+      { id:uid(), find:"GOP",         replace:"CUNT",     matchType:"text",  caseSensitive:false, enabled:true }
+    ],
+    badregex: [
+      { id:uid(), find:"republican",  replace:"pervert", matchType:"text",  caseSensitive:false, enabled:true },
+      { id:uid(), find:"(unclosed",   replace:"x",       matchType:"regex", caseSensitive:false, enabled:true }
+    ]
+  };
+  function loadScenario(name, withSeed){
+    var rows = JSON.parse(JSON.stringify(SCEN[name])).map(function(r){ r.id = uid(); return r; });
+    state.rows = rows; state.enabled = true; state.dirty = false; state.status = "idle"; forceError = false;
+    masterSwitch.setAttribute("aria-checked","true");
+    seedLine.hidden = !withSeed;
+    render();
+  }
+  window.__loadScenario = loadScenario;
+
+  Array.prototype.forEach.call(document.querySelectorAll('[data-scn]'), function(b){
+    b.addEventListener("click", function(){
+      Array.prototype.forEach.call(document.querySelectorAll('[data-scn]'), function(x){ x.setAttribute("aria-pressed","false"); });
+      b.setAttribute("aria-pressed","true");
+      loadScenario(b.dataset.scn, b.dataset.scn === "fresh");
+    });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-err]'), function(b){
+    b.addEventListener("click", function(){
+      Array.prototype.forEach.call(document.querySelectorAll('[data-err]'), function(x){ x.setAttribute("aria-pressed","false"); });
+      b.setAttribute("aria-pressed","true");
+      forceError = (b.dataset.err === "quota");
+    });
+  });
+
+  loadScenario("mixed", false);
+})();
+</script>
+</body>
+</html>
