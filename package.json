@@ -1,0 +1,15 @@
+{
+  "name": "contentcensor",
+  "version": "3.0.0",
+  "private": true,
+  "type": "commonjs",
+  "description": "Content Censor — MV3, jQuery-free, accessible text-replacement extension.",
+  "scripts": {
+    "test": "node --test",
+    "gates": "node scripts/ci-gates.js",
+    "check": "node scripts/check-syntax.js"
+  },
+  "devDependencies": {
+    "jsdom": "^24.0.0"
+  }
+}

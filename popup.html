@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+   <title>Content Censor</title>
+   <link rel="stylesheet" href="popup.css">
+</head>
+<body class="cc-popup">
+
+   <!-- A9: semantic landmark + single h1; the switch is a real role="switch". -->
+   <main id="main" aria-labelledby="cc-h1">
+     <h1 id="cc-h1">Content Censor</h1>
+
+     <p id="cc-lede" class="cc-lede">Replace terms on the pages you visit.</p>
+
+     <section aria-label="Replacements status">
+       <div class="cc-switch-row">
+          <button id="cc-master" type="button" role="switch" aria-checked="true"
+                  aria-labelledby="cc-h1"
+                  aria-label="Apply replacements on this profile">
+            <span class="cc-switch-track"><span class="cc-switch-thumb"></span></span>
+            <span id="cc-switch-text" class="cc-switch-text">Replacements on</span>
+          </button>
+       </div>
+
+       <!-- A4: aria-live polite summary + F-5 example-rule copy. -->
+       <p id="cc-summary" role="status" aria-live="polite">0 terms active · last updated —</p>
+
+       <button id="cc-open-settings" type="button" class="cc-primary">Open settings</button>
+
+       <button id="cc-toggle-all" type="button">Toggle all</button>
+     </section>
+
+     <p id="cc-h2" class="cc-h2" role="heading" aria-level="2">Active terms</p>
+     <ul id="cc-preview" role="list" aria-label="First three active replacement terms"></ul>
+   </main>
+
+   <script src="storage.js"></script>
+   <script src="popup.js"></script>
+</body>
+</html>

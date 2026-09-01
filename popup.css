@@ -1,0 +1,202 @@
+/*
+* popup.css — external stylesheet for BOTH extension surfaces (M1 / UI U2: the
+* inline <style> from index.htm is externalized here; MV3 §4.1 CSP-clean popup).
+*
+* A11y (UI §5): A8 contrast — text/labels on white >= 4.5:1; dimmed/disabled
+* states carry a text cue, not color alone (A2). A5 :focus-visible ring on every
+* interactive control. A13 prefers-reduced-motion disables the toast transition.
+*/
+
+:root {
+   --cc-fg: #1a1a1a;            /* 15.8:1 on white */
+   --cc-fg-dim: #5a5a5a;        /* 7.0:1 on white — dimmed still >= 4.5:1 */
+   --cc-bg: #ffffff;
+   --cc-line: #2a2a2a;
+   --cc-accent: #0b5fff;        /* 5.9:1 on white */
+   --cc-danger: #b00020;        /* 7.4:1 on white */
+   --cc-focus: #0b5fff;
+   --cc-field-bg: #fff;
+   --cc-field-line: #666;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 14px;
+  width: 360px;
+  font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  color: var(--cc-fg);
+  background: var(--cc-bg);
+}
+
+.cc-options body { width: 560px; }
+
+h1 { font-size: 18px; margin: 0 0 6px; }
+h2 { font-size: 14px; margin: 14px 0 6px; }
+
+.cc-lede { color: var(--cc-fg-dim); margin: 0 0 10px; }
+
+/* A5: a single, high-contrast focus-visible ring everywhere. */
+:focus-visible {
+  outline: 2px solid var(--cc-focus);
+  outline-offset: 2px;
+}
+
+/* ---- master switch (A3: role="switch" + aria-checked, not a bare checkbox) -- */
+.cc-switch-row { display: flex; align-items: center; gap: 10px; }
+
+button[role="switch"] {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--cc-line);
+  border-radius: 8px;
+  background: var(--cc-field-bg);
+  color: var(--cc-fg);
+  font: inherit;
+  cursor: pointer;
+}
+
+.cc-switch-track {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  border-radius: 10px;
+  background: #cfcfcf;
+  flex: 0 0 auto;
+}
+button[role="switch"][aria-checked="true"] .cc-switch-track { background: var(--cc-accent); }
+
+.cc-switch-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+}
+button[role="switch"][aria-checked="true"] .cc-switch-thumb { left: 18px; }
+
+.cc-switch-text { min-width: 96px; text-align: left; }
+
+/* ---- status / dirty / message (A4) --------------------------------------- */
+#cc-summary, #cc-dirty, #cc-message { margin: 4px 0; font-size: 13px; }
+#cc-summary { color: var(--cc-fg-dim); }
+.cc-dirty { color: var(--cc-fg-dim); font-style: italic; }
+#cc-message[role="status"] { color: var(--cc-fg-dim); }
+#cc-message[role="alert"] { color: var(--cc-danger); font-weight: 600; }
+
+/* ---- rules grid ---------------------------------------------------------- */
+.cc-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.cc-toolbar-actions button, .cc-footer button {
+  font: inherit;
+  padding: 5px 10px;
+  border: 1px solid var(--cc-line);
+  border-radius: 6px;
+  background: var(--cc-field-bg);
+  color: var(--cc-fg);
+  cursor: pointer;
+}
+.cc-toolbar-actions button:disabled, .cc-footer button:disabled {
+  opacity: 1;                 /* A2: don't rely on faded color alone — keep text */
+  color: var(--cc-fg-dim);
+  cursor: default;
+}
+
+.cc-grid { list-style: none; margin: 0; padding: 0; border: 1px solid var(--cc-line); }
+.cc-grid > li { padding: 0; }
+
+/* Each <cc-rule-row> renders a light-DOM .cc-row group. */
+.cc-row {
+  display: grid;
+  grid-template-columns: 28px 1fr 1fr auto;
+  grid-template-areas:
+    "toggle match find del"
+    ".      case   rep  .";
+  gap: 6px 8px;
+  padding: 8px;
+  border-bottom: 1px solid var(--cc-line);
+  align-items: start;
+}
+.cc-row:last-child { border-bottom: none; }
+
+.cc-toggle { grid-area: toggle; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.cc-toggle input { width: 18px; height: 18px; }
+.cc-toggle span { font-size: 11px; color: var(--cc-fg-dim); }
+
+.cc-matches { grid-area: match; display: flex; gap: 10px; align-items: center; }
+.cc-matches[role="radiogroup"] { }
+.cc-match { display: inline-flex; align-items: center; gap: 3px; font-size: 13px; }
+.cc-case  { grid-area: case; display: inline-flex; align-items: center; gap: 3px; font-size: 13px; }
+
+.cc-field { display: flex; flex-direction: column; gap: 2px; }
+.cc-field .cc-find { grid-area: find; }
+.cc-field .cc-replace { grid-area: rep; }
+.cc-field-lbl { font-size: 11px; color: var(--cc-fg-dim); font-weight: 600; }
+.cc-row input[type="text"] {
+  font: inherit;
+  padding: 4px 6px;
+  border: 1px solid var(--cc-field-line);
+  border-radius: 4px;
+  background: var(--cc-field-bg);
+  color: var(--cc-fg);
+}
+.cc-row input.cc-invalid { border-color: var(--cc-danger); }
+
+.cc-delete {
+  grid-area: del;
+  justify-self: end;
+  font: inherit;
+  padding: 4px 8px;
+  border: 1px solid var(--cc-danger);
+  color: var(--cc-danger);
+  border-radius: 4px;
+  background: var(--cc-field-bg);
+  cursor: pointer;
+  align-self: center;
+}
+
+.cc-err {
+  grid-column: 1 / -1;
+  color: var(--cc-danger);
+  font-size: 12px;
+  min-height: 1em;
+}
+
+.cc-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---- popup preview ------------------------------------------------------- */
+.cc-preview { list-style: none; margin: 6px 0 0; padding: 0; }
+.cc-preview li { display: flex; gap: 8px; font-size: 13px; padding: 2px 0; }
+.cc-preview-type {
+  align-self: center;
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--cc-fg-dim);
+  border: 1px solid var(--cc-field-line);
+  border-radius: 4px;
+  padding: 0 4px;
+  min-width: 42px;
+  text-align: center;
+}
+.cc-empty { color: var(--cc-fg-dim); font-style: italic; }
+
+.cc-footer { display: flex; gap: 8px; margin-top: 10px; }
+
+/* A13: respect reduced motion for the in-page toast transition. */
+@media (prefers-reduced-motion: reduce) {
+  [id="cc-toast"] { transition: none !important; }
+}

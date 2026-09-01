@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Content Censor — Settings</title>
+  <!-- M1/U2: external CSS, no inline <style> (MV3 §4.1 CSP-clean popup). -->
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main id="main">
+    <h1>Content Censor — Settings</h1>
+
+    <p class="cc-lede">
+      Content Censor replaces terms on the web pages you visit with what you choose
+      here. Changes are saved to this profile and apply everywhere you reload a page.
+    </p>
+
+    <section aria-labelledby="master-label">
+      <h2 id="master-label">Status</h2>
+      <div class="cc-switch-row">
+        <button id="cc-master" type="button" role="switch" aria-checked="true"
+                aria-label="Apply replacements on this profile">
+          <span class="cc-switch-track"><span class="cc-switch-thumb"></span></span>
+          <span class="cc-switch-text">Replacements on</span>
+        </button>
+        <!-- A4: aria-live status for saved/dirty/errors. -->
+        <p id="cc-message" role="status" aria-live="polite" hidden></p>
+      </div>
+
+      <p id="cc-summary" role="status" aria-live="polite">0 terms active · last updated —</p>
+      <p id="cc-dirty" role="status" aria-live="polite" class="cc-dirty" hidden>
+        You have unsaved changes.
+      </p>
+    </section>
+
+    <section aria-labelledby="rules-label">
+      <div class="cc-toolbar">
+        <h2 id="rules-label">Replacement rules</h2>
+        <div class="cc-toolbar-actions">
+          <button id="cc-toggle-all" type="button">Toggle all</button>
+          <button id="cc-add" type="button">+ Add rule</button>
+          <button id="cc-save" type="button" disabled>Save</button>
+        </div>
+      </div>
+
+      <!-- role="list" groups over grid: each row is a self-describing group
+           (UI §3.2 F-2 decision — a grid implies arrow-key navigation we don't do).
+           Exactly TWO delegated listeners (click + change/input) live on #cc-grid. -->
+      <ul id="cc-grid" role="list" aria-label="Replacement rules" class="cc-grid"></ul>
+
+      <p id="cc-empty" class="cc-empty" hidden>
+       No rules yet — add your first replacement.
+      </p>
+    </section>
+    </main>
+
+  <!-- Loaded in order: controller depends on CCStorage + the CcRuleRow element. -->
+  <script src="storage.js"></script>
+  <script src="cc-rule-row.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>

@@ -1,29 +1,41 @@
 {
-	"manifest_version": 2,
+  "manifest_version": 3,
+  "name": "Content Censor",
+  "author": "Content Censor Developer",
+  "description": "Changes web pages with unpleasant things to less unpleasant things in the most childish manner imaginable.",
+  "version": "3.0.0",
 
-	"name": "Content Censor",
-	"author": "Content Censor Developer",
+  "icons": {
+    "48": "contentcensor48.png",
+    "128": "contentcensor128.png"
+  },
 
-	"description": "Changes web pages with unpleasant things to less unpleasant things in the most childish manner imaginable.",
-	"version": "2.0.2",
+  "minimum_chrome_version": "120",
 
-	"icons": {
-		"48": "contentcensor48.png",
-		"128": "contentcensor128.png"
-	},
-	"browser_action": {
-		"default_icon": "contentcensor48.png",
-		"default_popup": "index.htm"
-	},
-	"background": {
-		"scripts": ["eventPages.js"],
-		"persistent": false
-	},
-	"content_scripts": [
-		{
-			"matches": ["http://*/*", "https://*/*"],
-			"js": ["jquery-2.1.4.min.js", "popup.js"]
-		}
-	],
-	"permissions": ["storage"]
+  "action": {
+    "default_icon": "contentcensor48.png",
+    "default_popup": "popup.html"
+  },
+
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+
+  "background": {
+    "service_worker": "background.js"
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["lib/rules.js", "content.js"]
+    }
+  ],
+
+  "permissions": ["storage"],
+
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'; base-uri 'self';"
+  }
 }
