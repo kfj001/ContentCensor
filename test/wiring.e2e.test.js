@@ -53,74 +53,84 @@ function loadShippedPage(filename, initial) {
 }
 
 // -------------------------------------------------------------------------
-// P0-1: options.html script chain is broken (lib/rules.js absent, storage.js 1st)
+// P0-1 [FIXED]: lib/rules.js is now FIRST in the options.html script chain, so
+// storage.js finds window.CCRules and window.CCStorage is defined on load.
 // -------------------------------------------------------------------------
-test("[P0-1] options.html script chain is broken as shipped", async () => {
+test("[P0-1] options.html loads lib/rules.js before storage.js (chain fixed)", async () => {
   const { srcs, firstError, win } = loadShippedPage("options.html", {
      contentCensorData: [
         { id: "a", find: "go", replace: "stop", matchType: "text", enabled: true },
         { id: "b", find: "hi", replace: "there", matchType: "text", enabled: true }],
      enabled: true
-     });
+      });
 
-  assert.ok(firstError, "the shipped chain throws at load (proves P0)");
-  assert.strictEqual(srcs[0], "storage.js",
-      "storage.js runs FIRST, before lib/rules.js supplies window.CCRules");
-  assert.ok(!/lib\/rules\.js/.test(srcs.join(" ")),
-      "lib/rules.js is NOT in the page's script chain");
-  assert.strictEqual(typeof win.CCStorage, "undefined",
-      "window.CCStorage was never defined — the grid controller has nothing to bind (P0-1)");
+  assert.ok(!firstError,
+       "the shipped chain now loads cleanly — P0-1 fixed (lib/rules.js first)");
+  assert.strictEqual(srcs[0], "lib/rules.js",
+       "lib/rules.js runs FIRST, supplying window.CCRules before storage.js");
+  assert.ok(/lib\/rules\.js/.test(srcs.join(" ")),
+       "lib/rules.js is now in the page's script chain (the fix)");
+  const idxRules = srcs.indexOf("lib/rules.js");
+  const idxStorage = srcs.indexOf("storage.js");
+  assert.ok(idxRules >= 0 && idxStorage > idxRules,
+       "lib/rules.js loads before storage.js (dependency order, mirrors manifest.content_scripts)");
+  assert.strictEqual(typeof win.CCStorage, "object",
+       "window.CCStorage is now defined — storage.js stopped hitting its require() fallback (P0-1)");
 });
 
 // P0-2: storage.js reads `global.chrome` (load/save/onChanged), which resolves in
 // Node (global === Node's global) but is a portability hazard in a page context,
 // where the global object is `window`. Load rules.js first so we isolate the
 // `global` reference from the broken-script-chain crash (that's P0-1).
-test("[P0-2] storage.js uses `global.chrome` in load/save/onChanged (portability hazard)", async () => {
+// P0-2 [FIXED]: storage.js resolves chrome via window/globalThis, so it no longer
+// throws on an undefined `global` in a page context. Load rules.js first so the
+// require() fallback is skipped, then eval storage.js in a chrome-free window.
+test("[P0-2] storage.js no longer reads `global.chrome` (portability fixed)", async () => {
   const code = fs.readFileSync(path.join(ROOT, "storage.js"), "utf8");
-  const hits = (code.match(/global\s*\.\s*chrome/g) || []).length;
-  assert.ok(hits >= 1,
-     "storage.js reads global.chrome in load/save/onChanged (breaks page portability)");
+  assert.strictEqual((code.match(/global\s*\.\s*chrome/g) || []).length, 0,
+        "storage.js no longer reads bare global.chrome anywhere");
 
-     // With window.CCRules present (rules.js loaded first), storage.js no longer
-     // hits its require() fallback; the next failure is the undefined-`global`
-     // reference — the portability hazard.
+  // With lib/rules.js loaded, storage.js has CCRules; the only remaining failure
+  // it used to be was the undefined-`global` reference — now it resolves chrome
+  // through window/globalThis and does not throw on `global` being undefined.
   const dom = new JSDOM("<!DOCTYPE html><body></body></html>",
-      { runScripts: "outside-only", pretendToBeVisual: true });
+        { runScripts: "outside-only", pretendToBeVisual: true });
   dom.window.eval(fs.readFileSync(path.join(ROOT, "lib/rules.js"), "utf8"));
   const err = evalRealChromeFree(dom.window, "storage.js");
-  assert.ok(err && /global is not defined/.test(err.message),
-     "outside Node, the `global.chrome` reference throws before storage.js can wire (P0-2)");
+  assert.ok(!err || !/global is not defined/.test(err && err.message || ""),
+        "P0-2 fixed: storage.js no longer throws on an undefined `global` outside Node");
 });
 
-// P0-3: the shipped pages never invoke init() -> they render nothing.
-test("[P0-3] options.html renders no rows as shipped (init never invoked)", async () => {
+// P0-3 [FIXED]: the options page now self-invokes init() at load, so the grid
+// renders rows on its own — no test-harness call required.
+test("[P0-3] options.html renders its loaded rows on load (init self-invoked)", async () => {
   const { win } = loadShippedPage("options.html", {
      contentCensorData: [
         { id: "a", find: "go", replace: "stop", matchType: "text", enabled: true }],
      enabled: true
-     });
+      });
   await flush(); await flush();
   const grid = win.document.getElementById("cc-grid");
   assert.ok(grid, "the grid element exists in the markup");
-  assert.strictEqual(grid.querySelectorAll("cc-rule-row").length, 0,
-       "no <cc-rule-row> rendered — the controller never wired the grid (P0-3)");
+  assert.strictEqual(grid.querySelectorAll("cc-rule-row").length, 1,
+       "the controller self-invokes init() and wires the grid (P0-3 fixed)");
 });
 
-// P0-3b: popup.html stays at its placeholder summary as shipped.
-test("[P0-3b] popup.html summary never updates as shipped (init never invoked)", async () => {
+// P0-3b [FIXED]: the popup page self-invokes init() at load, so its summary
+// reflects the ruleset instead of the markup placeholder.
+test("[P0-3b] popup.html summary updates on load (init self-invoked)", async () => {
   const { win } = loadShippedPage("popup.html", {
      contentCensorData: [
         { id: "a", find: "go", replace: "stop", matchType: "text", enabled: true }],
      enabled: true, seededExamples: 1
-     });
+      });
   await flush(); await flush();
   const summary = win.document.getElementById("cc-summary");
-  assert.match(summary.textContent, /0 terms active/,
-      "summary is frozen at the markup placeholder — controller never rendered it (P0-3b)");
+  assert.ok(!/0 terms active/.test(summary.textContent),
+        "summary reflects the ruleset — the controller rendered it (P0-3b fixed)");
   const preview = win.document.getElementById("cc-preview");
-  assert.strictEqual(preview.children.length, 0,
-       "no rule preview rendered as shipped (P0-3b)");
+  assert.ok(preview && preview.children.length === 1,
+        "preview shows the one active rule — the render ran (P0-3b fixed)");
 });
 
 // -------------------------------------------------------------------------

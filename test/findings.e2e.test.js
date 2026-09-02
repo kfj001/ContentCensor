@@ -45,18 +45,28 @@ function loadShippedPage(filename, initial) {
 // FIX: add <script src="lib/rules.js"> before storage.js in options.html + popup.html.
 //      AFTER FIX: flip this test to expect window.CCStorage to be DEFINED.
 // ---------------------------------------------------------------------------
-test("P0-1 [DEFECT] options.html does not load lib/rules.js -> storage.js has no CCRules", async () => {
+// P0-1 [FIXED] lib/rules.js now runs FIRST in the options.html script chain, so
+// storage.js finds window.CCRules and defines window.CCStorage without its
+// Node-only require() fallback. Assert the healthy chain.
+// (This test was a FAILING-by-design characterization of the broken state; the fix
+// adds <script src="lib/rules.js"> before storage.js — see QA-REPORT §5.1.)
+test("P0-1 [FIXED] options.html loads lib/rules.js first -> storage.js defines CCStorage", async () => {
   const { srcs, win, firstError } = loadShippedPage("options.html", {
      contentCensorData: [
-          { id: "a", find: "go", replace: "stop", matchType: "text", enabled: true }],
+           { id: "a", find: "go", replace: "stop", matchType: "text", enabled: true }],
      enabled: true });
-  assert.strictEqual(srcs[0], "storage.js", "storage.js runs before rules.js can supply CCRules");
-  assert.ok(!/lib\/rules\.js/.test(srcs.join(" ")),
-       "lib/rules.js is absent from the options.html script chain (P0-1)");
-  assert.ok(firstError, "the shipped chain throws at load -> CCStorage never defines");
+  assert.ok(!firstError, "the shipped chain loads without a ReferenceError (P0-1 fixed)");
+  assert.strictEqual(srcs[0], "lib/rules.js",
+        "lib/rules.js runs FIRST, before storage.js needs window.CCRules");
+  assert.ok(/lib\/rules\.js/.test(srcs.join(" ")),
+        "lib/rules.js is present in the options.html script chain");
+  const idxRules = srcs.indexOf("lib/rules.js");
+  const idxStorage = srcs.indexOf("storage.js");
+  assert.ok(idxRules >= 0 && idxStorage > idxRules,
+        "lib/rules.js loads before storage.js (dependency order)");
   await flush();
-  assert.strictEqual(typeof win.CCStorage, "undefined",
-       "P0-1: options.js/CCStorage controller has nothing to bind — the page is dead");
+  assert.strictEqual(typeof win.CCStorage, "object",
+        "P0-1 fixed: storage.js defined window.CCStorage — the controller has a store to bind");
 });
 
 // P0-2  storage.js reads `global.chrome`; in a page the global object is `window`,
@@ -64,42 +74,45 @@ test("P0-1 [DEFECT] options.html does not load lib/rules.js -> storage.js has no
 // FIX: use `self.chrome` (or a `(typeof globalThis!=='undefined'?globalThis:window)`
 //      global accessor, as cc-rule-row/rules already do). AFTER FIX: flip to expect no throw.
 // ---------------------------------------------------------------------------
-test("P0-2 [DEFECT] storage.js references `global.chrome` (undefined in a page context)", async () => {
+// P0-2 [FIXED] storage.js resolves chrome via window/globalThis, not a bare
+// `global` reference. Load rules.js first and eval storage.js in a chrome-free
+// jsdom window: it must NOT throw on an undefined `global`.
+// (Fix: getChrome() helper — window.chrome → globalThis.chrome → Node global.)
+test("P0-2 [FIXED] storage.js no longer references `global.chrome`", async () => {
   const code = fs.readFileSync(path.join(ROOT, "storage.js"), "utf8");
-  assert.ok((code.match(/global\s*\.\s*chrome/g) || []).length >= 1,
-     "storage.js reads global.chrome in load/save/onChanged");
+  assert.strictEqual((code.match(/global\s*\.\s*chrome/g) || []).length, 0,
+         "storage.js no longer reads bare global.chrome in load/save/onChanged");
   const dom = new JSDOM("<!DOCTYPE html><body></body></html>",
-       { runScripts: "outside-only", pretendToBeVisual: true });
-  dom.window.eval(fs.readFileSync(path.join(ROOT, "lib/rules.js"), "utf8")); // skip require fallback
+         { runScripts: "outside-only", pretendToBeVisual: true });
+  dom.window.eval(fs.readFileSync(path.join(ROOT, "lib/rules.js"), "utf8")); // supplies CCRules
   const err = evalRealChromeFree(dom.window, "storage.js");
-  assert.ok(err && /global is not defined/.test(err.message),
-     "P0-2: storage.js throws on the undefined `global` reference outside Node");
+  assert.ok(!err || !/global is not defined/.test(err && err.message || ""),
+         "P0-2 fixed: storage.js no longer throws on an undefined `global` outside Node");
 });
 
-// P0-3  init() is exposed but never invoked on the shipped pages -> nothing renders.
-// FIX: call options.init()/popup.init() at the end of each controller IIFE (or on
-//      DOMContentLoaded). AFTER FIX: flip to expect rows to render.
-// ---------------------------------------------------------------------------
-test("P0-3 [DEFECT] options.html renders 0 rows (init never invoked)", async () => {
+// P0-3 [FIXED] the options page self-invokes init() at (DOM) load, so the grid
+// renders without any test-harness call. Assert the healthy render.
+// (Fix: load-time init() entry + idempotency guard in options.js — QA-REPORT §5.3.)
+test("P0-3 [FIXED] options.html renders rows on load (init self-invoked)", async () => {
   const { win } = loadShippedPage("options.html", {
      contentCensorData: [
-          { id: "a", find: "go", replace: "stop", matchType: "text", enabled: true }],
+           { id: "a", find: "go", replace: "stop", matchType: "text", enabled: true }],
      enabled: true });
   await flush();
   const grid = win.document.getElementById("cc-grid");
   assert.ok(grid, "the grid element exists in markup");
-  assert.strictEqual(grid.querySelectorAll("cc-rule-row").length, 0,
-     "P0-3: no <cc-rule-row> rendered — controller never wired the grid");
+  assert.strictEqual(grid.querySelectorAll("cc-rule-row").length, 1,
+         "P0-3 fixed: init() self-invoked at load renders the row(s)");
 });
 
-test("P0-3 [DEFECT] popup.html summary never updates (init never invoked)", async () => {
+test("P0-3 [FIXED] popup.html summary updates on load (init self-invoked)", async () => {
   const { win } = loadShippedPage("popup.html", {
      contentCensorData: [
-          { id: "a", find: "go", replace: "stop", matchType: "text", enabled: true }],
+           { id: "a", find: "go", replace: "stop", matchType: "text", enabled: true }],
      enabled: true, seededExamples: 1 });
   await flush();
-  assert.match(win.document.getElementById("cc-summary").textContent, /0 terms active/,
-     "P0-3: popup summary frozen at its markup placeholder");
+  assert.ok(!/0 terms active/.test(win.document.getElementById("cc-summary").textContent),
+          "P0-3 fixed: popup summary is no longer frozen at the markup placeholder");
 });
 
 // P1  Even when wired, render() does not reflect the `find` attribute into the

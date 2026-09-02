@@ -57,13 +57,14 @@ function makeDom(html, { chrome, setup } = {}) {
 function makeChromeMock(initial) {
   const store = Object.assign({}, initial || {});
   const listeners = { onChanged: [] };
+  const addChanged = function (cb) { listeners.onChanged.push(cb); };
   const chrome = {
      runtime: {
        lastError: null,
        onInstalled: { addListener: function (cb) { this._cb = cb; }, _cb: null },
        onStartup: { addListener: function (cb) { this._cb = cb; }, _cb: null },
        openOptionsPage: function () { chrome.runtime._opened = true; }
-         },
+          },
      storage: {
        sync: {
         get: function (keys, cb) {
@@ -73,24 +74,25 @@ function makeChromeMock(initial) {
           for (let i = 0; i < arr.length; i++)
             if (store[arr[i]] !== undefined) out[arr[i]] = store[arr[i]];
           setTimeout(function () { cb(out); }, 0);
-            },
+             },
         set: function (obj, cb) {
           chrome.runtime.lastError = null;
           for (const k in obj) store[k] = obj[k];
           setTimeout(function () {
             for (const l of listeners.onChanged) l(obj, "sync");
             if (cb) cb();
-              }, 0);
-            },
+               }, 0);
+             },
         clear: function (cb) {
           chrome.runtime.lastError = null;
           for (const k in store) delete store[k];
           setTimeout(function () { if (cb) cb(); }, 0);
-            }
-          }
-        },
-      onChanged: { addListener: function (cb) { listeners.onChanged.push(cb); } }
-          };
+             }
+       },
+       // Chrome MV3 fires chrome.storage.onChanged — real API shape.
+       onChanged: { addListener: addChanged }
+         }
+     };
   chrome._store = store;
   chrome._listeners = listeners;
 

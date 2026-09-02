@@ -19,6 +19,7 @@
 
 (function () {
   var S = (typeof window !== "undefined" && window.CCStorage) ? window.CCStorage : null;
+  var _inited = false;
 
   function $id(id) { return document.getElementById(id); }
 
@@ -97,12 +98,29 @@
         }
 
   function init() {
+    if (_inited) return;               // P0-3: wire exactly once (idempotent)
+    _inited = true;
     if (!S) return;
     S.load(function () {
       render();
       var sw = $id("cc-master");
-      if (sw && sw.focus) sw.focus();     // focus on open (A6)
-         });
+      if (sw && sw.focus) sw.focus();      // focus on open (A6)
+          });
+
+    // P1-1: re-render on a cross-surface change (a rule saved from the options
+    // page must refresh an already-open popup, F-6). Mirror storage.js's dirty
+    // guard so a local unsaved edit is never clobbered by the incoming snapshot.
+    var c = (typeof window !== "undefined" && window.chrome)
+            || (typeof globalThis !== "undefined" && globalThis.chrome)
+            || (typeof global !== "undefined" ? global.chrome : undefined);
+    if (c && c.storage && c.storage.onChanged) {
+      c.storage.onChanged.addListener(function (changes, area) {
+        if (area !== "sync") return;
+        if (changes.contentCensorData || changes.enabled) {
+          if (!S.state.dirty) S.load(function () { render(); });
+          }
+        });
+        }
 
     var sw = $id("cc-master");
     if (sw) sw.addEventListener("change", function () {
@@ -129,9 +147,19 @@
         try { window.close(); } catch (_e) { /* some harnesses */ }
           }
           });
-         }
+          }
 
-       // Expose for tests.
+          // Load-time entry (P0-3): invoke init() when the DOM is ready so the
+          // shipped popup page renders on its own — no test-harness call needed.
+          if (typeof document !== "undefined") {
+          if (document.readyState === "loading") {
+          document.addEventListener("DOMContentLoaded", init, { once: true });
+          } else {
+          init();
+          }
+          }
+
+          // Expose for tests.
        if (typeof module !== "undefined" && module.exports) module.exports = {
          render: render, init: init, previewRows: previewRows, formatUpdated: formatUpdated
           };

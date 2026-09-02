@@ -65,42 +65,48 @@ test("F-5 install/startup seeds 6 example rules, idempotently", async () => {
     "user data preserved");
 });
 
-// ── F-6 cross-surface: documented P1 — onChanged live re-render gap ────────────
-// A second rule is pushed to the store and chrome.storage.sync.set triggers
-// the onChanged listener. storage.js reloads, but the popup summary does not
-// re-render because popup.js's onChanged handler does not call its render loop.
-// This is a P1 live-update defect; documented here so the gap is always visible.
-test("F-6 [P1 BUG]: popup onChanged handler does not re-render summary", async () => {
+// ── F-6 cross-surface: P1 BUG FIXED — popup re-renders on store change ───────
+// A second rule is pushed to the store and a chrome.storage.sync.set triggers
+// the onChanged listener (chrome.storage.onChanged). The popup's controller
+// picks up the change, reloads storage, and re-renders the summary — now "2
+// terms active" instead of "1 term active".
+//
+// The popup's own chrome mock must receive the set() call for the onChanged to
+// fire — that mirrors Chrome, where all extension surfaces share the same
+// chrome.storage backend.
+test("F-6 [P1 FIX]: popup re-renders summary on chrome.storage.onChanged", async () => {
   const chrome = makeChromeMock({
     contentCensorData: [
         { id: "a", find: "go", replace: "stop", matchType: "text", enabled: true },
-      ],
+       ],
     enabled: true,
     updatedAt: Date.now(),
-    });
+     });
 
   const pop = await loadPopupPage({ initial: chrome._store });
   await flush();
   const summaryBefore = pop.document.getElementById("cc-summary").textContent;
-  assert.match(summaryBefore, /1 term active/, "popup starts with 1 active term");
+  assert.ok(/1 term active/.test(summaryBefore), "popup starts with 1 active term");
 
-    // Push a second rule and trigger a set.
-  chrome._store.contentCensorData.push({
-      id: "b", find: "tea", replace: "party", matchType: "text", enabled: true,
-    });
-  chrome.storage.sync.set(
-      { contentCensorData: chrome._store.contentCensorData, enabled: true, updatedAt: Date.now() },
-      function () {},
-    );
+   // Push a second rule and trigger a set through the popup's own chrome mock.
+  pop.chrome._store.contentCensorData.push({
+       id: "b", find: "tea", replace: "party", matchType: "text", enabled: true,
+      });
+  pop.chrome.storage.sync.set(
+        { contentCensorData: pop.chrome._store.contentCensorData, enabled: true, updatedAt: Date.now() },
+       function () {},
+      );
   await flush();
   await flush();
   await flush();
   await flush();
   const summaryAfter = pop.document.getElementById("cc-summary").textContent;
 
-    // P1 DEFECT: the popup does not re-render its summary on store changes.
-  assert.equal(summaryAfter, summaryBefore,
-   "P1 BUG: popup onChanged handler does not re-render the summary after store change");
+   // P1 FIXED: the onChanged handler re-renders the popup summary.
+  assert.notEqual(summaryAfter, summaryBefore,
+       "P1-1 fixed: popup onChanged handler re-renders the summary after store change");
+  assert.ok(/[2] terms active/.test(summaryAfter),
+       "summary now shows 2 active terms after a second rule was saved cross-surface");
 });
 
 // ── F-6 data contract: atomic save writes contentCensorData + enabled + updatedAt ──
@@ -130,11 +136,10 @@ test("F-6 contract: atomic save writes all 3 fields, no clear()", async () => {
   assert.strictEqual(typeof written.enabled, "boolean", "save persisted the enabled flag");
 });
 
-// ── F-5 → F-3: documented P1 — content.js initial DOM walk gap ────────────────
-// content.js sets up a MutationObserver on load but does NOT walk the initial
-// DOM. This means static page text is not replaced on first load.
-// This test documents the bug explicitly; it should be fixed in the next cycle.
-test("F-5→F-3 [P1 BUG]: content.js does NOT walk initial DOM", async () => {
+// ── F-5 → F-3 content.js walks the initial DOM on load (P1-2 fixed) ──────────
+// After the fix, applyData runs a one-time walk(document.body) after ensureObserver,
+// so the static "GOP" text present at injection time IS replaced on first load.
+test("F-5→F-3: content.js walks the initial DOM and replaces static text on load", async () => {
   const chrome = makeChromeMock({
     contentCensorData: [
       { id: "1", find: "GOP", replace: "CUNT", matchType: "text", enabled: true },
@@ -149,19 +154,17 @@ test("F-5→F-3 [P1 BUG]: content.js does NOT walk initial DOM", async () => {
   await flush();
   const p = r.document.querySelector("p");
 
-  // DOCUMENTED BEHAVIOUR: text stays "the GOP was here" — content.js never
-  // calls walk(document.body) on initial load. This is a P1 defect.
-  assert.strictEqual(p.textContent, "the GOP was here",
-    "P1 BUG: content.js does not walk initial DOM — text is not replaced on first load");
-});
+  // FIXED BEHAVIOUR: the one-time walk in applyData replaces the static text
+  // that was present at injection time.
+  assert.strictEqual(p.textContent, "the CUNT was here",
+      "P1-2 fixed: content.js walks the initial DOM — GOP → CUNT on first load");
+  });
 
-// ── F-3/A12: MutationObserver-based cycle guard — documents actual behaviour ──
-// content.js sets up an observer but does NOT walk the existing DOM on load.
-// In a real Chrome extension, content scripts may inject after the page loads
-// (e.g. SPA routes, AJAX-loaded content) and will miss text already present.
-// This test documents the jsdom-observable symptom; the content.test.js
-// unit tests verify replacement logic via direct applyData() calls.
-test("F-3 [P1 BUG]: content.js does not walk pre-existing DOM on load", async () => {
+// ── F-3 / A12: content.js walks pre-existing DOM on load (P1-1/P1-2 fixed) ───
+// loadAndRun() reads chrome.storage; applyData() then runs a one-time
+// walk(document.body) so static text present at injection time IS replaced
+// ("hello" → "world").
+test("F-3: content.js walks pre-existing DOM and replaces static text on load", async () => {
   const chrome = makeChromeMock({
     contentCensorData: [
           { id: "1", find: "hello", replace: "world", matchType: "text", enabled: true },
@@ -175,8 +178,8 @@ test("F-3 [P1 BUG]: content.js does not walk pre-existing DOM on load", async ()
   await flush();
   await flush();
   const text = r.document.querySelector("p").textContent;
-  assert.strictEqual(text, "hello",
-     "P1 BUG: content.js does NOT walk pre-existing DOM — text 'hello' stays unmodified");
+  assert.strictEqual(text, "world",
+       "P1-2 fixed: content.js walks pre-existing DOM on load — 'hello' → 'world'");
 });
 
 // ── Data contract: save preserves user data (no clear) ────────────────────────

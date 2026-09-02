@@ -151,26 +151,33 @@
      cycleDetected = false;
     applying = false;
     ensureObserver();
-   }
+    // P1-2: the observer only CATCHES future mutations. Replace any text that was
+    // already present at injection time (static content, SPA hydration, cached
+    // pages) with a one-time walk over the current snapshot. The master flag is
+    // honoured because `patterns` is [] when disabled; the text-node-only walk
+    // (A14) keeps host semantics intact.
+    if (document.body) walk(document.body);
+      }
 
   function loadAndRun() {
-    var c = typeof chrome !== "undefined" ? chrome : null;
-    if (!c || !c.storage || !c.storage.sync) return;
-    c.storage.sync.get(["contentCensorData", "enabled", "contentCensorProfile"],
+    if (typeof chrome === "undefined" || !chrome.storage || !chrome.storage.sync) return;
+    chrome.storage.sync.get(["contentCensorData", "enabled", "contentCensorProfile"],
       function (items) {
         items = items || {};
         toastEnabled = !!(items.contentCensorProfile && items.contentCensorProfile.toast);
         if (window.matchMedia) {
           try { reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches; }
           catch (_e) { reducedMotion = false; }
-        }
+          }
         applyData(items);
-      });
-   }
+       });
+    }
 
-   // React to edits from the options/popup without a full page reload.
-  var chrome = typeof chrome !== "undefined" ? chrome : null;
-  if (chrome && chrome.storage && chrome.storage.onChanged) {
+    // React to edits from options/popup without a full page reload (F-6).
+    // `chrome` here is the global — NOT a module-scope var (a `var chrome`
+    // declaration shadows the global and self-references the hoisted-undefined
+    // value, so loadAndRun never reads chrome.storage).
+  if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.onChanged) {
     chrome.storage.onChanged.addListener(function (changes, area) {
       if (area !== "sync") return;
       if (changes.contentCensorData || changes.enabled || changes.contentCensorProfile) {
@@ -179,10 +186,10 @@
             items = items || {};
             toastEnabled = !!(items.contentCensorProfile && items.contentCensorProfile.toast);
             applyData(items);
-          });
-      }
-     });
-   }
+           });
+       }
+      });
+    }
 
    // Initial pass: run now if body exists, else on DOMContentLoaded.
   if (typeof document !== "undefined") {

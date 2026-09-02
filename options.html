@@ -54,7 +54,11 @@
     </section>
     </main>
 
-  <!-- Loaded in order: controller depends on CCStorage + the CcRuleRow element. -->
+  <!-- Loaded in order: controller depends on CCStorage + the CcRuleRow element.
+       lib/rules.js runs FIRST (P0-1) mirroring manifest.content_scripts, so that
+       when storage.js loads it already finds window.CCRules and does not hit its
+       Node-only require("./lib/rules.js") fallback (which throws in a page). -->
+  <script src="lib/rules.js"></script>
   <script src="storage.js"></script>
   <script src="cc-rule-row.js"></script>
   <script src="options.js"></script>

@@ -22,7 +22,8 @@
 (function () {
   var S = (typeof window !== "undefined" && window.CCStorage) ? window.CCStorage : null;
   var els = {};
-  var lastTouchedTag = null;   // control to refocus after a save re-render (A6)
+  var _inited = false;
+  var lastTouchedTag = null;    // control to refocus after a save re-render (A6)
 
    // Local helper: document.getElementById by id. NOT jQuery — the module is
    // dependency-free (0 KB, UI §4.3); this wraps only a native call.
@@ -164,6 +165,8 @@
      }
 
   function init() {
+    if (_inited) return;              // P0-3: wire exactly once (idempotent)
+    _inited = true;
 els.grid = byId("cc-grid");
      els.add = byId("cc-add");
      els.save = byId("cc-save");
@@ -236,13 +239,24 @@ els.grid = byId("cc-grid");
           });
 
             // Load, then render, then focus the master switch on open (A6).
-        S.load(function () {
-          render();
-          if (els.switch && els.switch.focus) els.switch.focus();
-            });
-          }
+            S.load(function () {
+             render();
+             if (els.switch && els.switch.focus) els.switch.focus();
+                });
+            }
 
-            // Expose for tests (does not run until the page supplies #cc-grid).
+            // Load-time entry (P0-3): invoke init() when the DOM is ready so the
+            // shipped options page renders on its own — the controller no longer
+            // depends on the test harness calling init() for it.
+            if (typeof document !== "undefined") {
+             if (document.readyState === "loading") {
+               document.addEventListener("DOMContentLoaded", init, { once: true });
+             } else {
+               init();
+             }
+            }
+
+                // Expose for tests (does not run until the page supplies #cc-grid).
         if (typeof module !== "undefined" && module.exports) module.exports = {
           render: render, doSave: doSave, init: init, updateStatus: updateStatus,
           readRow: readRow, activeCount: activeCount

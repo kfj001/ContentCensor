@@ -11,14 +11,25 @@
 *
 * Loaded as a classic extension-page script. `window.CCStorage` exposes the API;
 * `module.exports` exposes the same API to the node test runner (with a chrome
-* mock injected as global.chrome).
+* mock injected as win.chrome / globalThis.chrome via getChrome()).
 */
 "use strict";
 
 (function () {
-  var Rules = (typeof window !== "undefined" && window.CCRules)
+   var Rules = (typeof window !== "undefined" && window.CCRules)
        ? window.CCRules
-        : require("./lib/rules.js");   // node test fallback
+        : require("./lib/rules.js");    // node test fallback — not hit in a page once lib/rules.js loads first (P0-1)
+
+   // The chrome API. In a real extension page the global object is `window`, so a
+   // bare `global` reference throws a ReferenceError (P0-2). Resolve the API
+   // through window then globalThis, and fall back to undefined when chrome is not
+   // present (the onChanged wiring below is guarded on that). In Node, globalThis
+   // === global, so this still resolves a test-injected chrome mock.
+  function getChrome() {
+    if (typeof window !== "undefined" && window.chrome) return window.chrome;
+    if (typeof globalThis !== "undefined" && globalThis.chrome) return globalThis.chrome;
+    return undefined;
+      }
 
     // Fresh projection of what the UI holds; persisted shape == Rules.serializeSync.
   function freshState() {
@@ -37,7 +48,7 @@
 
     /** Read storage, migrate legacy rows into the v3 shape, populate state. */
   function load(cb) {
-    var c = global.chrome;
+    var c = getChrome();
     c.storage.sync.get(["contentCensorData", "enabled", "updatedAt", "seededExamples"],
       function (items) {
         items = items || {};
@@ -79,7 +90,7 @@
   function save() {
     state.status = "saving";
     var payload = Rules.serializeSync(state);
-    var c = global.chrome;
+    var c = getChrome();
     c.storage.sync.set(payload, function () {
       // In MV3 the set callback receives no error object; the error (if any) is
       // on chrome.runtime.lastError.
@@ -100,7 +111,7 @@
     }
 
     // Wire cross-surface live update WITHOUT clobbering a local unsaved edit.
-  var c = global.chrome;
+  var c = getChrome();
   if (c && c.storage && c.storage.onChanged) {
     c.storage.onChanged.addListener(function (changes, area) {
       if (area !== "sync") return;
