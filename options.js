@@ -25,9 +25,15 @@
   var _inited = false;
   var lastTouchedTag = null;    // control to refocus after a save re-render (A6)
 
-   // Local helper: document.getElementById by id. NOT jQuery — the module is
-   // dependency-free (0 KB, UI §4.3); this wraps only a native call.
+    // Local helper: document.getElementById by id. NOT jQuery — the module is
+    // dependency-free (0 KB, UI §4.3); this wraps only a native call.
    function byId(id) { return document.getElementById(id); }
+
+    // Keep the switch's visible "Replacements on/off" label in sync with its state.
+   function reflectLabel(on) {
+     var lbl = byId("cc-switch-text");
+     if (lbl) lbl.textContent = "Replacements " + (on ? "on" : "off");
+    }
 
   function activeCount() {
     return S.state.rows.filter(function (r) { return r.enabled !== false && !!r.find; }).length;
@@ -178,17 +184,21 @@ els.grid = byId("cc-grid");
      els.empty = byId("cc-empty");
      els.settings = byId("cc-open-settings");
 
-     // Master switch (F-1 / Q2): real role="switch" toggling the profile flag.
-    if (els.switch) {
-      els.switch.checked = S.state.enabled !== false;
-      els.switch.setAttribute("aria-checked", String(S.state.enabled !== false));
-      els.switch.addEventListener("change", function () {
-        S.setEnabled(els.switch.checked);
-        els.switch.setAttribute("aria-checked", String(S.state.enabled !== false));
-        S.markDirty();
-        updateStatus();
-          });
-        }
+      // Master switch (F-1 / Q2): a role="switch" <button> toggles on click via
+      // aria-checked — a <button> has no .checked property and never fires "change".
+      if (els.switch) {
+        var on = S.state.enabled !== false;
+        els.switch.setAttribute("aria-checked", String(on));
+        reflectLabel(on);
+        els.switch.addEventListener("click", function () {
+          var now = els.switch.getAttribute("aria-checked") !== "true";
+          els.switch.setAttribute("aria-checked", String(now));
+          reflectLabel(now);
+          S.setEnabled(now);
+          S.markDirty();
+          updateStatus();
+              });
+            }
 
         // ---- EXACTLY TWO delegated listeners on the grid (§4.3) --------------
      // 1) one click listener: data-action switch (add / delete / toggle-all /

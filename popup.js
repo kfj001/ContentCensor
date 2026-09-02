@@ -23,6 +23,12 @@
 
   function $id(id) { return document.getElementById(id); }
 
+     // Keep the switch's visible "Replacements on/off" label in sync with its state.
+  function reflectLabel(on) {
+    var lbl = $id("cc-switch-text");
+    if (lbl) lbl.textContent = "Replacements " + (on ? "on" : "off");
+     }
+
   function previewRows() {
     var active = S.state.rows.filter(function (r) {
       return r.enabled !== false && !!r.find;
@@ -38,12 +44,13 @@
       });
     var n = active.length;
 
-      // Master switch reflects the profile enabled flag (Q2).
-    var sw = $id("cc-master");
-    if (sw) {
-      sw.checked = S.state.enabled !== false;
-      sw.setAttribute("aria-checked", String(S.state.enabled !== false));
-       }
+        // Master switch reflects the profile enabled flag (Q2) via aria-checked.
+      var sw = $id("cc-master");
+      if (sw) {
+        var on = S.state.enabled !== false;
+        sw.setAttribute("aria-checked", String(on));
+        reflectLabel(on);
+            }
 
       // Summary line (A4 aria-live polite; F-5 example-rule copy on first install).
     var summary = $id("cc-summary");
@@ -122,12 +129,14 @@
         });
         }
 
-    var sw = $id("cc-master");
-    if (sw) sw.addEventListener("change", function () {
-      S.setEnabled(sw.checked);
-      sw.setAttribute("aria-checked", String(S.state.enabled !== false));
-      S.save();
-        });
+      var sw = $id("cc-master");
+      if (sw) sw.addEventListener("click", function () {
+        var now = sw.getAttribute("aria-checked") !== "true";
+        sw.setAttribute("aria-checked", String(now));
+        reflectLabel(now);
+        S.setEnabled(now);
+        S.save();
+             });
 
     var open = $id("cc-open-settings");
     if (open) open.addEventListener("click", function () {

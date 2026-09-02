@@ -6,7 +6,7 @@
   <!-- M1/U2: external CSS, no inline <style> (MV3 §4.1 CSP-clean popup). -->
   <link rel="stylesheet" href="popup.css">
 </head>
-<body>
+<body class="cc-options">
   <main id="main">
     <h1>Content Censor — Settings</h1>
 
@@ -21,7 +21,7 @@
         <button id="cc-master" type="button" role="switch" aria-checked="true"
                 aria-label="Apply replacements on this profile">
           <span class="cc-switch-track"><span class="cc-switch-thumb"></span></span>
-          <span class="cc-switch-text">Replacements on</span>
+            <span id="cc-switch-text" class="cc-switch-text">Replacements on</span>
         </button>
         <!-- A4: aria-live status for saved/dirty/errors. -->
         <p id="cc-message" role="status" aria-live="polite" hidden></p>

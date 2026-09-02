@@ -32,18 +32,19 @@ test("F-1/Q2 master switch toggles enabled + persists (role=switch, aria-checked
              { id: "a", find: "go", replace: "stop", matchType: "text", enabled: true }],
        enabled: true }
         });
-  const sw = r.document.getElementById("cc-master");
-  assert.strictEqual(sw.getAttribute("role"), "switch", "master is a role=switch (A3)");
-  assert.strictEqual(sw.getAttribute("aria-checked"), "true");
+   const sw = r.document.getElementById("cc-master");
+     assert.strictEqual(sw.getAttribute("role"), "switch", "master is a role=switch (A3)");
+     assert.strictEqual(sw.getAttribute("aria-checked"), "true");
 
-    // Flip it off.
-  sw.checked = false;
-  fireWin(r.win, sw, "change");
-  await settle(r.win, 8);
-  assert.strictEqual(r.win.CCStorage.state.enabled, false, "toggling updates the flag");
-  assert.strictEqual(r.chrome._store.enabled, false, "enabled flag persisted (not wiped rules)");
-    // Rules are PRESERVED, not wiped (Q2).
-  assert.strictEqual(r.chrome._store.contentCensorData.length, 1, "rules preserved when disabled (Q2)");
+        // Flip it off. A role="switch" <button> toggles on click via aria-checked
+        // (it has no .checked and never fires "change").
+      sw.click();
+     await settle(r.win, 8);
+     assert.strictEqual(sw.getAttribute("aria-checked"), "false", "click flips aria-checked");
+     assert.strictEqual(r.win.CCStorage.state.enabled, false, "toggling updates the flag");
+     assert.strictEqual(r.chrome._store.enabled, false, "enabled flag persisted (not wiped rules)");
+        // Rules are PRESERVED, not wiped (Q2).
+     assert.strictEqual(r.chrome._store.contentCensorData.length, 1, "rules preserved when disabled (Q2)");
 });
 
 // A7: Escape closes the popup when there are no unsaved edits.
