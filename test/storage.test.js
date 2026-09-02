@@ -1,0 +1,100 @@
+/*
+ * test/storage.test.js — storage.js controller: atomic save (no clear()), legacy
+ * migration on load, per-row enable, dirty/status. UI §4.1 / §4.3 / M1.
+ */
+"use strict";
+
+const { test } = require("node:test");
+const assert = require("node:assert");
+const { makeChromeMock, drain } = require("./helpers");
+
+/** Run two async ticks so chained setTimeout(…, 0) callbacks settle. */
+async function run() {
+  await new Promise((r) => setTimeout(r, 0));
+  await new Promise((r) => setTimeout(r, 0));
+}
+
+function loadStorage(initial) {
+  global.chrome = makeChromeMock(initial);
+  delete require.cache[require.resolve("../storage.js")];
+  return require("../storage.js");
+}
+
+test("load migrates legacy {find,replace,isRegex} into the v3 shape", async () => {
+  const S = loadStorage({
+    contentCensorData: [
+         { find: "go", replace: "stop", isRegex: false },
+         { find: "abc", replace: "x", isRegex: true }
+         ]
+    });
+  let captured;
+  S.load((state) => { captured = state; });
+  await run();
+  assert.strictEqual(captured.rows.length, 2);
+  assert.strictEqual(captured.rows[0].matchType, "text");
+  assert.strictEqual(captured.rows[1].matchType, "regex");
+  assert.strictEqual(captured.rows[0].caseSensitive, false);
+  assert.ok(captured.rows[0].id, "id minted on migration");
+  assert.strictEqual(captured.status, "idle");
+  assert.strictEqual(captured.dirty, false);
+});
+
+test("save is a single atomic sync.set with NO clear() (M1 / MV3 Phase 0.2)", async () => {
+  let clearCalled = false;
+  global.chrome = makeChromeMock({ contentCensorData: [{ find: "go", replace: "stop", enabled: true }] });
+  global.chrome.storage.sync.clear = function (cb) { clearCalled = true; if (cb) cb(); };
+  const S = loadStorage({ contentCensorData: [], enabled: true });
+
+  S.load(() => {});
+  await run();
+  S.addRow();
+  S.state.rows[0].find = "go";
+  S.state.rows[0].replace = "stop";
+  S.save();
+  await run();
+
+  assert.strictEqual(clearCalled, false, "clear() must NOT be called");
+  assert.strictEqual(S.state.status, "saved");
+  assert.strictEqual(S.state.dirty, false);
+  assert.strictEqual(global.chrome._store.contentCensorData[0].find, "go");
+});
+
+test("save keeps dirty=true on a forced quota/lastError failure (no data loss)", async () => {
+  global.chrome = makeChromeMock({ contentCensorData: [] });
+  const S = loadStorage({ contentCensorData: [] });
+  S.load(() => {});
+  await run();
+  S.addRow();
+  S.state.rows[0].find = "go";
+  S.state.rows[0].replace = "stop";
+  global.chrome._failSave = true;
+  S.save();
+  await run();
+  assert.strictEqual(S.state.status, "error");
+  assert.strictEqual(S.state.dirty, true, "failure keeps the user able to retry");
+});
+
+test("save persists only enabled + non-empty-find rows", async () => {
+  global.chrome = makeChromeMock();
+  const S = loadStorage();
+  S.load(() => {});
+  await run();
+  S.addRow(); S.state.rows[0].find = "keep"; S.state.rows[0].replace = "K";
+  S.addRow(); S.state.rows[1].find = "";                          // dropped
+  S.addRow(); S.state.rows[2].find = "hi"; S.state.rows[2].enabled = false; // dropped
+  S.save();
+  await run();
+  const saved = global.chrome._store.contentCensorData;
+  assert.strictEqual(saved.length, 1);
+  assert.strictEqual(saved[0].find, "keep");
+});
+
+test("setEnabled flips the profile flag and marks dirty", async () => {
+  global.chrome = makeChromeMock();
+  const S = loadStorage({ enabled: true });
+  S.load(() => {});
+  await run();
+  S.setEnabled(false);
+  assert.strictEqual(S.state.enabled, false);
+  assert.strictEqual(S.state.dirty, true);
+});

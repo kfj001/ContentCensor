@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Content Censor — F-1 Popup (status &amp; control)</title>
+<link rel="stylesheet" href="CC-design-tokens.css">
+<style>
+  /* F-1 popup is a small fixed-width dialog over a page. Surface: MONITOR + a little OPERATE.
+     Composition is NOT a hero: it's a glanceable status card with ONE decision (on/off) and a
+     single path out (Open settings). Details are progressive disclosure, not in-your-face. */
+  .demo-stage {
+    min-height: 100vh;
+    background: linear-gradient(180deg, #e9edf2, #dfe4ea);
+    display: grid; place-items: start center; padding: var(--sp-6) var(--sp-4);
+    gap: var(--sp-5);
+  }
+  .caption { max-width: 360px; color: var(--ink-2); background:#fff; border:1px solid var(--border);
+    border-radius: var(--radius); padding: var(--sp-3) var(--sp-4); box-shadow: var(--shadow-1); }
+  .caption h3 { margin:0 0 var(--sp-2); font-size: var(--fs); font-weight:650; }
+  .caption p, .caption li { color: var(--muted); font-size: var(--fs-sm); }
+  .caption ul { margin: 0; padding-left: var(--sp-3); }
+
+  /* The popup itself — 300px fixed width, dialog over the page. */
+  .popup {
+    width: var(--popup-w);
+    background: var(--bg);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-2);
+    padding: var(--sp-4);
+    position: relative;
+    border: 1px solid var(--border);
+  }
+  .popup::before {
+    content: ""; position: absolute; top: 44px; left: 50%; transform: translateX(-50%);
+    width: 1px; height: 44px; background: var(--border-2); /* toolbar tether hint */
+  }
+
+  .popup__head { display:flex; align-items:center; gap: var(--sp-2); margin-bottom: var(--sp-3); }
+  .popup__logo { width: 26px; height: 26px; border-radius: 6px; background: var(--ink);
+    color:#fff; display:grid; place-items:center; font-weight:700; font-size:13px; flex:0 0 auto; }
+  .popup__title { font-weight: 650; font-size: var(--fs-lg); }
+  .status-dot { width:10px; height:10px; border-radius:50%; flex:0 0 auto; margin-left:auto; }
+  .status-dot[data-on="true"]  { background: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb,var(--accent) 22%,transparent); }
+  .status-dot[data-on="false"] { background: var(--surface-2); box-shadow: 0 0 0 3px var(--border); }
+
+  /* Master switch — a real role="switch" button, NOT a checkbox styled as one (A3). */
+  .switch-row {
+    display:flex; align-items:center; justify-content:space-between; gap: var(--sp-3);
+    background: var(--surface); border:1px solid var(--border); border-radius: var(--radius);
+    padding: var(--sp-2) var(--sp-3);
+  }
+  .switch-row__label { font-weight:600; font-size: var(--fs-sm); color: var(--ink-2); }
+  .switch {
+    --w: 44px; --h: 26px;
+    width: var(--w); height: var(--h); border-radius: 999px; border: 1px solid var(--border-2);
+    background: var(--surface-2); position: relative; cursor: pointer; padding:0; flex:0 0 auto;
+    transition: background var(--dur-fast) var(--ease);
+  }
+  .switch[aria-checked="true"] { background: var(--accent); border-color: var(--accent); }
+  .switch__thumb {
+    position:absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius:50%;
+    background:#fff; box-shadow: var(--shadow-1);
+    transition: transform var(--dur-fast) var(--ease);
+  }
+  .switch[aria-checked="true"] .switch__thumb { transform: translateX(18px); }
+  /* state text so on/off is never color-only (A2) */
+  .switch__state {
+    position:absolute; inset:0; display:grid; place-items:center; font-size:9px; font-weight:700;
+    letter-spacing:.04em; text-transform:uppercase; color:#fff; opacity:0; transition:opacity var(--dur-fast);
+  }
+  .switch[aria-checked="true"]  .switch__state.on  { opacity:.92; }
+  .switch[aria-checked="false"] .switch__state.off { opacity:.9; color:var(--ink-2); }
+
+  /* Summary line — aria-live region so changes announce without focus moves (A4). */
+  .summary {
+    margin-top: var(--sp-3); font-size: var(--fs); color: var(--ink-2);
+    display:flex; align-items:baseline; gap: var(--sp-2);
+  }
+  .summary__count { font-size: var(--fs-xl); font-weight: 700; color: var(--ink); letter-spacing:-.01em; }
+  .summary__count small { font-size: var(--fs-sm); font-weight:500; color: var(--muted); }
+  .summary__updated { color: var(--muted); font-size: var(--fs-sm); margin-left:auto; }
+
+  /* Preview: first 3 active rules — READ-ONLY (progressive disclosure, not editing here). */
+  .preview { margin-top: var(--sp-4); }
+  .preview__title { font-size: var(--fs-xs); text-transform:uppercase; letter-spacing:.06em;
+    color: var(--muted); font-weight:700; margin-bottom: var(--sp-1); }
+  .preview__list { list-style:none; margin:0; padding:0; display:grid; gap: 2px; }
+  .preview__item {
+    display:grid; grid-template-columns: 1fr auto; gap: var(--sp-2) var(--sp-3);
+    align-items:center; padding: var(--sp-2) var(--sp-2); border-radius: var(--radius-sm);
+  }
+  .preview__item:hover { background: var(--surface); }
+  .preview__find  { font-weight:600; color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .preview__arrow { color: var(--muted); }
+  .preview__repl { color: var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; direction:rtl; text-align:left; }
+  .preview__tag { grid-column:2; justify-self:end; font-size:9px; text-transform:uppercase;
+    letter-spacing:.05em; font-weight:700; padding:1px 5px; border-radius:4px; }
+  .tag-regex { background: color-mix(in srgb, var(--focus) 12%, #fff); color: var(--focus); }
+  .preview__empty { color: var(--muted); font-style:italic; padding: var(--sp-2); }
+  .preview__more { font-size: var(--fs-sm); color: var(--muted); margin-top: var(--sp-1); }
+
+  /* Suggested-suggestions banner (F-5 install copy) */
+  .seed {
+    margin-top: var(--sp-3); background: color-mix(in srgb, var(--focus) 8%, #fff);
+    border:1px solid color-mix(in srgb, var(--focus) 30%, #fff); border-radius: var(--radius);
+    padding: var(--sp-2) var(--sp-3); font-size: var(--fs-sm); color: var(--ink-2);
+    display:flex; gap: var(--sp-2); align-items:flex-start;
+  }
+  .seed svg { flex:0 0 auto; margin-top:1px; }
+
+  /* Primary action */
+  .btn {
+    font: inherit; font-weight:600; cursor:pointer; border-radius: var(--radius);
+    padding: var(--sp-2) var(--sp-4); border:1px solid transparent;
+    display:inline-flex; align-items:center; gap: var(--sp-2);
+    transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+  }
+  .btn--primary { background: var(--ink); color:#fff; width:100%; justify-content:center; margin-top: var(--sp-4); }
+  .btn--primary:hover { background:#000; }
+  .btn--primary:disabled { background: var(--surface-2); color: var(--ink-disabled); cursor:not-allowed; }
+
+  /* Demo controls (not part of the product; labelled as such). */
+  .demo-bar { display:flex; flex-wrap:wrap; gap: var(--sp-1); align-items:center; }
+  .demo-bar__label { font-size: var(--fs-xs); text-transform:uppercase; letter-spacing:.06em;
+    color: var(--muted); font-weight:700; margin-right: var(--sp-1); }
+  .seg { display:inline-flex; border:1px solid var(--border-2); border-radius: var(--radius); overflow:hidden; }
+  .seg button {
+    font:inherit; font-size: var(--fs-sm); padding: var(--sp-1) var(--sp-3); border:none; background:#fff;
+    cursor:pointer; color: var(--ink-2); border-right:1px solid var(--border);
+  }
+  .seg button:last-child { border-right:none; }
+  .seg button[aria-pressed="true"] { background: var(--ink); color:#fff; }
+</style>
+</head>
+<body>
+<!-- DEMO STAGE: shows the popup in its three states + live switch. Product UI is the .popup;
+     everything in .demo-stage / .demo-bar is authoring chrome for the mockup, clearly separated. -->
+<main class="demo-stage" aria-label="F-1 popup prototype — Content Censor status &amp; control panel">
+
+  <section class="caption" aria-labelledby="cap-h">
+    <h3 id="cap-h">F-1 — Popup · status-at-a-glance + progressive disclosure</h3>
+    <p>The popup is a <strong>glanceable Monitor</strong> with one decision (on/off) and one path out
+    (Open settings). It is <em>not</em> the editor — that lives on the options page (F-2). The master
+    switch is a real <code>role="switch"</code> (A3); the summary and any status are <code>aria-live</code>
+    (A4); state is never conveyed by color alone (A2).</p>
+    <ul>
+      <li>Focus on open → master switch (A6); <kbd>Esc</kbd>/click-outside close freely (no unsaved edits here, A7).</li>
+      <li>Reduced-motion: switch slide is disabled under <code>prefers-reduced-motion</code> (A13).</li>
+    </ul>
+  </section>
+
+  <!-- ===================== THE POPUP (product surface) ===================== -->
+  <div class="popup" role="dialog" aria-labelledby="pop-title" aria-describedby="pop-summary">
+
+    <header class="popup__head">
+      <span class="popup__logo" aria-hidden="true">C</span>
+      <h1 id="pop-title" class="popup__title">Content Censor</h1>
+      <span class="status-dot" id="dot" data-on="true" aria-hidden="true"></span>
+    </header>
+
+    <!-- Master on/off switch (A3) -->
+    <div class="switch-row">
+      <span class="switch-row__label" id="sw-label">Apply replacements</span>
+      <button class="switch" id="masterSwitch" role="switch" aria-checked="true"
+              aria-labelledby="sw-label" aria-describedby="master-state">
+        <span class="switch__state on" aria-hidden="true">ON</span>
+        <span class="switch__state off" aria-hidden="true">OFF</span>
+        <span class="switch__thumb" aria-hidden="true"></span>
+      </button>
+      <span id="master-state" class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">
+        Applying text replacements on every page.
+      </span>
+    </div>
+
+    <!-- Summary line: aria-live polite (A4). Count + relative time, read from state.rows + updatedAt. -->
+    <div class="summary" id="pop-summary" aria-live="polite">
+      <span class="summary__count" id="summaryCount">12 <small>terms active</small></span>
+      <span class="summary__updated" id="summaryUpdated">last updated 2h ago</span>
+    </div>
+
+    <!-- F-5 install: seeded defaults are legible as SUGGESTIONS, not the user's own rules -->
+    <div class="seed" id="seedBanner" hidden>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>
+      <span>6 example rules loaded — edit or delete them in Settings.</span>
+    </div>
+
+    <!-- Compact READ-ONLY preview of first 3 active rules (progressive disclosure). -->
+    <section class="preview" aria-labelledby="prev-title">
+      <p class="preview__title" id="prev-title">Active rules</p>
+      <ul class="preview__list" id="previewList" aria-label="Preview of the first active replacement rules">
+        <!-- populated by JS; read-only, ellipsized -->
+      </ul>
+    </section>
+
+    <button class="btn btn--primary" id="openSettings" data-action="open-settings">
+      Open settings
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path d="M5 12h14M13 6l6 6-6 6"/></svg>
+    </button>
+  </div>
+
+  <!-- ===================== DEMO CONTROLS (authoring chrome) ===================== -->
+  <div class="demo-bar" role="group" aria-label="Demo: preview state">
+    <span class="demo-bar__label">Preview state</span>
+    <div class="seg" role="group" aria-label="Popup state">
+      <button data-state="on" aria-pressed="true">On · 12</button>
+      <button data-state="off" aria-pressed="false">Off (all inactive)</button>
+      <button data-state="empty" aria-pressed="false">Empty</button>
+      <button data-state="fresh" aria-pressed="false">Fresh install</button>
+    </div>
+  </div>
+
+  <div class="demo-bar demo-bar__state" role="group" aria-label="Demo: error / no-network">
+    <span class="demo-bar__label">Error state</span>
+    <div class="seg" role="group" aria-label="Popup error">
+      <button data-err="none" aria-pressed="true">No error</button>
+      <button data-err="quota" aria-pressed="false">Save failed (quota)</button>
+    </div>
+    <p id="demoNote" style="flex-basis:100%;margin:var(--sp-2) 0 0;color:var(--muted);font-size:var(--fs-sm)">
+      Demo chrome above is <em>not</em> part of the shipped product. The green dot is decorative; every
+      state it mirrors is also carried by text / aria (A2).
+    </p>
+  </div>
+</main>
+
+<script>
+/* F-1 controller. Vanilla, no runtime. In production this reads chrome.storage.sync;
+   here it reads from a fixture so the mockup is self-contained and stateful. */
+(function () {
+  // Production would `chrome.storage.sync.get("contentCensorData", ...)` and map to this shape.
+  var FIXTURES = {
+    on:  { enabled: true,  updatedAt: "2h ago",
+            preview: [
+              { find:"republican",  replace:"pervert",   matchType:"text" },
+              { find:"tea party",   replace:"pervert",   matchType:"text" },
+              { find:"\\biPhone\\b",replace:"Abortion",  matchType:"regex", raw:"iPhone" },
+              { find:"Republican",  replace:"Pervert",   matchType:"text" }
+            ].concat([{find:"a",replace:"b",matchType:"text"},{find:"c",replace:"d",matchType:"text"},{find:"e",replace:"f",matchType:"text"}]),
+            count: 12 },
+    off: { enabled: false, updatedAt: "2h ago",
+            preview: [
+              { find:"republican",  replace:"pervert", matchType:"text" },
+              { find:"tea party",   replace:"pervert", matchType:"text" },
+              { find:"\\biPhone\\b",replace:"Abortion",matchType:"regex", raw:"iPhone" }
+            ],
+            count: 12 },
+    empty: { enabled: true, updatedAt: null, preview: [], count: 0 },
+    fresh: { enabled: true, updatedAt: null, seeded: true,
+            preview: [
+              { find:"republican", replace:"pervert", matchType:"text" },
+              { find:"tea party",  replace:"pervert", matchType:"text" },
+              { find:"iPhone",     replace:"Abortion",matchType:"regex", raw:"iPhone" }
+            ],
+            count: 6 }
+  };
+
+  var state;                 // current view state
+  var errorMode = "none";
+
+  var $ = {
+    popup:      document.querySelector(".popup"),
+    dot:        document.getElementById("dot"),
+    switch:     document.getElementById("masterSwitch"),
+    masterState:document.getElementById("master-state"),
+    count:      document.getElementById("summaryCount"),
+    updated:    document.getElementById("summaryUpdated"),
+    seed:       document.getElementById("seedBanner"),
+    preview:    document.getElementById("previewList"),
+    openS:      document.getElementById("openSettings")
+  };
+
+  function esc(s){ return String(s).replace(/[&<>"]/g, function(c){
+    return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];
+  }); }
+
+  function render(){
+    var v = FIXTURES[state] || FIXTURES.on;
+
+    // switch reflects master `enabled`
+    var on = v.enabled;
+    $.switch.setAttribute("aria-checked", on ? "true":"false");
+    $.dot.dataset.on = on ? "true":"false";
+    $.masterState.textContent = on
+      ? "Applying text replacements on every page."
+      : "Text replacements are paused. Rules are unchanged.";
+
+    // summary count + updated
+    $.count.innerHTML = "<span>" + v.count + "</span> <small>term" + (v.count===1?"":"s") + " active</small>";
+    $.updated.textContent = v.updated ? "last updated " + v.updated
+                        : (v.count===0 ? "no rules yet" : "just now");
+
+    // F-5 seed banner
+    $.seed.hidden = !v.seeded;
+
+    // preview (first 3 active rules — read-only, ellipsized, no parallel-array indexing)
+    $.preview.innerHTML = "";
+    if (!v.preview.length) {
+      var empty = document.createElement("li");
+      empty.className = "preview__empty";
+      empty.textContent = "No rules yet — add your first replacement in Settings.";
+      $.preview.appendChild(empty);
+    } else {
+      v.preview.slice(0,3).forEach(function(r){
+        var li = document.createElement("li");
+        li.className = "preview__item";
+        li.innerHTML =
+          '<span class="preview__find">' + esc(r.raw || r.find) + '</span>' +
+          '<span class="preview__arrow" aria-hidden="true">→</span>' +
+          '<span class="preview__repl">' + esc(r.replace) + '</span>' +
+          (r.matchType==="regex"
+            ? '<span class="preview__tag tag-regex">regex</span>' : '');
+        // Accessible: announce the mapping as a labelled phrase (not color, not position).
+        li.setAttribute("aria-label",
+          (r.raw || r.find) + " replaced with " + r.replace +
+          (r.matchType==="regex" ? " (regex)" : ""));
+        $.preview.appendChild(li);
+      });
+      if (v.count > 3) {
+        var more = document.createElement("p");
+        more.className = "preview__more";
+        more.id = "previewMore";
+        more.textContent = "+ " + (v.count - 3) + " more in Settings.";
+        $.popup.querySelector(".preview").appendChild(more);
+      }
+    }
+
+    // Open-settings affordance disabled when there's nothing to configure? No — always reachable (A5).
+    $.openS.disabled = false;
+  }
+
+  // Live master switch (demo interactivity). In production: persist via chrome.storage.sync.set,
+  // then reconcile `enabled` on every <cc-rule-row> (disabled = !enabled). State carried by text +
+  // aria-checked, never color alone (A2/A3/A4).
+  $.switch.addEventListener("click", function(){
+    var wasOn = $.switch.getAttribute("aria-checked") === "true";
+    var nowOn = !wasOn;
+    $.switch.setAttribute("aria-checked", nowOn ? "true" : "false");
+    $.dot.dataset.on = nowOn ? "true" : "false";
+    var n = (FIXTURES[state] || FIXTURES.on).count;
+    var noun = n === 1 ? "term" : "terms";
+    $.count.innerHTML = nowOn
+      ? "<span>" + n + "</span> <small>" + noun + " active</small>"
+      : "<span>" + n + "</span> <small>rules paused</small>";
+    $.masterState.textContent = nowOn
+      ? "Applying text replacements on every page."
+      : "Text replacements are paused. Rules are unchanged.";
+  });
+
+  // Demo state switcher
+  Array.prototype.forEach.call(document.querySelectorAll('[data-state]'), function(btn){
+    btn.addEventListener("click", function(){
+      Array.prototype.forEach.call(document.querySelectorAll('[data-state]'),
+        function(b){ b.setAttribute("aria-pressed","false"); });
+      btn.setAttribute("aria-pressed","true");
+      state = btn.dataset.state;
+      render();
+    });
+  });
+
+  // Demo error injection (A4: error uses role=alert / assertive).
+  Array.prototype.forEach.call(document.querySelectorAll('[data-err]'), function(btn){
+    btn.addEventListener("click", function(){
+      errorMode = btn.dataset.err;
+      Array.prototype.forEach.call(document.querySelectorAll('[data-err]'),
+        function(b){ b.setAttribute("aria-pressed","false"); });
+      btn.setAttribute("aria-pressed","true");
+      var region = $.popup.querySelector('[role="alert"]');
+      if (region) region.remove();
+      if (errorMode === "quota") {
+        var alert = document.createElement("div");
+        alert.setAttribute("role","alert");   // assertive (A4)
+        alert.style.cssText = "margin-top:var(--sp-3);border:1px solid var(--danger);color:var(--danger);" +
+          "background:color-mix(in srgb,var(--danger) 8%,#fff);border-radius:var(--radius);padding:8px 10px;font-size:12px;";
+        alert.textContent = "Couldn't save — quota exceeded. Reduce the number of rules and try again.";
+        $.popup.insertBefore(alert, $.openS);
+      }
+    });
+  });
+
+  render();
+  // A6: focus the master switch on open (production: same, on popup open). In a browser mockup we
+  // don't steal focus on load, but the contract is honoured; expose the intent.
+})();
+</script>
+</body>
+</html>

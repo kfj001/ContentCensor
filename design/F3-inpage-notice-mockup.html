@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Content Censor — F-3 In-page "what changed" notice</title>
+<link rel="stylesheet" href="CC-design-tokens.css">
+<style>
+    /* F-3 is a *behaviour*, not a screen. Its only UI is a tiny opt-in notice, injected into the
+      *host page* by the content script. Design rule (A11/A13/A14):
+        - OFF by default. The product's purpose is that pages "just look kinder"; no injected UI unless
+          asked. A toggle lives in the popup/options ("Show me what changed").
+        - When on: role="status" aria-live="polite" — announced without stealing focus from the user.
+        - Self-removing, non-blocking, keyboard-dismissable (Esc / a close button).
+        - Built with document.createElement + inline styles; NO innerHTML from untrusted data, NO eval,
+          NO third-party import (§2.3 content-script isolation). Same-origin styles only.
+        - reduced-motion: no slide/fade under prefers-reduced-motion (A13).
+        - Safe failure: a self-matching rule pair can't wedge the tab — the re-entrancy guard stops it
+          and the notice says "Cycle detected, stopped" instead of hanging (A12).
+
+       The sample below emulates a host page so the notice can be seen in context. */
+
+    body { background:#fff; }
+
+    /* ── the emulated host page ── */
+    .host { max-width: 720px; margin: 0 auto; padding: var(--sp-6) var(--sp-4); }
+    .host h1 { font-size: 26px; }
+    .host p { color:#333; line-height:1.6; font-size:15px; }
+    .host .muted { color: var(--muted); }
+
+    /* ── the notice (the only thing F-3 actually ships) ── */
+    .cc-notice {
+      position: fixed; z-index: 2147483000;
+      right: var(--sp-4); bottom: var(--sp-4);
+      max-width: 320px;
+      background: var(--ink);            /* ink surface, white text → ~16:1 contrast */
+      color: #ffffff;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-2);
+      padding: var(--sp-2) var(--sp-3);
+      display: flex; align-items: center; gap: var(--sp-3);
+      font-size: var(--fs-sm);
+      /* Motion: a quiet rise+fade IN; none while reduced-motion (A13). */
+      transform: translateY(8px); opacity: 0;
+      transition: transform var(--dur) var(--ease), opacity var(--dur) var(--ease);
+    }
+    body.motion .cc-notice.is-shown { transform: translateY(0); opacity: 1; }
+    /* When reduced-motion is on, .is-shown is applied but transitions are neutered by the token
+       media-query — the toast appears instantly with no movement. */
+    .cc-notice__icon { flex:0 0 auto; display:grid; place-items:center; }
+    .cc-notice__icon svg { display:block; }
+    .cc-notice__msg { flex:1 1 auto; }
+    /* The count is TEXT, not colour-only (A2). */
+    .cc-notice__count { font-weight:700; }
+    .cc-notice__close {
+      flex:0 0 auto; background: transparent; color:#cfcfd4; border:none; cursor:pointer;
+      padding:2px; border-radius: var(--radius-sm); line-height:0;
+    }
+    .cc-notice__close:hover { color:#fff; }
+    .cc-notice__close:focus-visible { outline:none; box-shadow: 0 0 0 2px var(--ink), 0 0 0 4px #fff; }
+
+    /* error/cycle variant — a warmer surface, still >=4.5:1, still carries text (not color alone) */
+    .cc-notice.is-warn { background:#7a1f14; }
+    .cc-notice__state { display:none; }
+    .cc-notice.is-warn .cc-notice__state-warn { display:inline; }
+
+    /* demo chrome (not shipped) */
+    .demo { max-width:720px; margin: var(--sp-5) auto 0; padding: 0 var(--sp-4); }
+    .demo__bar { display:flex; flex-wrap:wrap; gap: var(--sp-2); align-items:center;
+      background: var(--surface); border:1px solid var(--border); border-radius: var(--radius);
+      padding: var(--sp-3); }
+    .demo__label { font-size: var(--fs-xs); text-transform:uppercase; letter-spacing:.06em;
+      color: var(--muted); font-weight:700; }
+    .demo__toggle { display:inline-flex; align-items:center; gap:6px; font-size: var(--fs-sm);
+      color: var(--ink-2); }
+    .demo__toggle input { width:16px; height:16px; accent-color: var(--accent); }
+    .seg { display:inline-flex; border:1px solid var(--border-2); border-radius: var(--radius); overflow:hidden; }
+    .seg button { font:inherit; font-size: var(--fs-sm); padding: var(--sp-1) var(--sp-2);
+      border:none; background:#fff; cursor:pointer; color: var(--ink-2); border-right:1px solid var(--border); }
+    .seg button:last-child { border-right:none; }
+    .seg button[aria-pressed="true"] { background: var(--ink); color:#fff; }
+    .caption { max-width:720px; margin: var(--sp-4) auto 0; padding: var(--sp-4);
+      background:#fff; border:1px solid var(--border); border-radius: var(--radius); }
+    .caption h4 { margin:0 0 var(--sp-1); } .caption p, .caption li { color:var(--ink-2); font-size:var(--fs-sm); }
+    .caption ul { margin:0; padding-left:var(--sp-3); }
+    code { font-family: var(--font-mono); font-size:.92em; }
+</style>
+</head>
+<body>
+<!-- Emulated host page so the notice has context. Notice styles are injected by the content script,
+     but here they live in-page for the mockup. -->
+<main class="host" aria-label="Example host web page">
+   <h1>The Tea Party and its critics</h1>
+   <p>This article discusses the <em>republican</em> movement, the <strong>tea party</strong>, and the
+   political dynamics around them. A reader of an <code>iPhone</code> might enjoy this on the go.</p>
+   <p class="muted">This text is replaced by Content Censor when the replacement ruleset is active and
+   the master switch is on. Nothing above changes unless a rule matches; the product's default is to be
+   unobtrusive.</p>
+</main>
+
+<!-- The notice — rendered in markup here but, in production, created by document.createElement with
+     the same attributes/ARIA. role=status + aria-live=polite → announced without moving focus. -->
+<div class="cc-notice" id="notice" role="status" aria-live="polite" aria-atomic="true" hidden>
+   <span class="cc-notice__icon" aria-hidden="true">
+     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8be0ac" stroke-width="2.2">
+       <circle cx="12" cy="12" r="9"/><path d="M7 12l3 3 7-7"/></svg>
+   </span>
+   <span class="cc-notice__msg">
+     <span class="cc-notice__state cc-notice__state-ok">
+       Replaced <span class="cc-notice__count" id="noticeCount">0</span> term(s) on this page.
+     </span>
+     <span class="cc-notice__state cc-notice__state-warn">
+       Cycle detected, stopped — a rule replaced its own output.
+     </span>
+   </span>
+   <button class="cc-notice__close" id="noticeClose" type="button" aria-label="Dismiss this notice">
+     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+       <path d="M6 6l12 12M18 6L6 18"/></svg>
+   </button>
+</div>
+
+<!-- ══ DEMO chrome: the opt-in toggle + scenario picker (in production the toggle lives in options) ══ -->
+<div class="demo" role="group" aria-label="Demo controls">
+   <div class="demo__bar">
+     <label class="demo__toggle">
+       <input type="checkbox" id="optIn" >
+       Show "what changed" notice (opt-in)
+     </label>
+     <span class="demo__label" style="margin-left:var(--sp-2)">Trigger</span>
+     <div class="seg" role="group" aria-label="Notice scenario">
+       <button data-n="ok" aria-pressed="true">Replaced 3</button>
+       <button data-n="warn" aria-pressed="false">Cycle detected</button>
+       <button data-n="zero" aria-pressed="false">0 replaced</button>
+     </div>
+     <button class="btn--primary" id="fireBtn" style="margin-left:auto;font:inherit;font-weight:600;
+       padding:6px 12px;border-radius:6px;border:1px solid var(--border-2);background:#fff;cursor:pointer;">
+       Fire replacement pass
+     </button>
+   </div>
+   <p style="margin:var(--sp-2) 0 0;color:var(--muted);font-size:var(--fs-sm)">
+     The notice appears only when the toggle is on. When off, the content script mutates text silently.
+     <kbd>Esc</kbd> or the close button dismisses it; it never traps focus (unlike a dialog).
+   </p>
+</div>
+
+<div class="caption" role="note">
+   <h4>F-3 — In-page "what changed" notice · passive + opt-in</h4>
+   <p>Content Censor's core is silent, non-destructive text replacement. The notice is the
+   <em>only</em> in-page UI and it is optional. It is built in the content script with
+   <code>document.createElement</code> + inline styles — no <code>innerHTML</code> from untrusted data,
+   no framework (§2.3). Count is read from the rule list, never a parallel array (defect #3).</p>
+   <ul>
+     <li><strong>Off by default</strong> (A11). The toggle that enables it lives in the popup/options, not on the page.</li>
+     <li><strong>role="status" aria-live="polite"</strong> (A4) — announced to assistive tech without stealing the user's focus from the page they're reading.</li>
+     <li><strong>keyboard-dismissable</strong> (<kbd>Esc</kbd> / close button with a visible focus ring) and <strong>non-modal</strong> — it does not trap focus the way a dialog would.</li>
+     <li><strong>Reduced-motion</strong> (A13): under <code>prefers-reduced-motion</code> the toast appears instantly with no slide/fade (the token media-query neutralises it).</li>
+     <li><strong>Safe failure</strong> (A12): a rule that matches its own output cannot wedge the tab — the re-entrancy guard stops it and the notice reports "Cycle detected, stopped" instead of hanging.</li>
+   </ul>
+</div>
+
+<script>
+(function(){
+ var notice = document.getElementById("notice");
+ var optIn  = document.getElementById("optIn");
+ var close  = document.getElementById("noticeClose");
+ var fire   = document.getElementById("fireBtn");
+ var state  = "ok";                 // ok | warn | zero
+ var hideTimer = null;
+
+  // Messages are our own literals, set via textContent (CSP-safe, no untrusted innerHTML — §2.3).
+  var MESSAGES = {
+   zero: 'No matching terms on this page.'
+   };
+
+   // A13: only animate when the user has NOT requested reduced motion.
+  var mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+  function applyMotion(){ document.body.classList.toggle("motion", !mq.matches); }
+  applyMotion();
+   if (mq.addEventListener) mq.addEventListener("change", applyMotion);
+   else if (mq.addListener) mq.addListener(applyMotion);
+
+  function renderMessage(){
+    var okSpan  = notice.querySelector(".cc-notice__state-ok");
+    var warnSpan= notice.querySelector(".cc-notice__state-warn");
+    okSpan.style.display = "none";
+    warnSpan.style.display = "none";
+     if (state === "warn") {
+       notice.classList.add("is-warn");
+       warnSpan.style.display = "inline";
+      }
+     else {
+       notice.classList.remove("is-warn");
+        var count = 3;
+        okSpan.textContent = state === "zero"
+          ? MESSAGES.zero
+          : "Replaced " + count + " term" + (count === 1 ? "" : "s") + " on this page.";
+        okSpan.style.display = "inline";
+       }
+    }
+  renderMessage(); // initial (hidden) render
+  function show(){
+    if (!optIn.checked) return;          // OFF by default — nothing is injected (A11)
+    clearTimeout(hideTimer);
+    notice.hidden = false;
+    renderMessage();
+     // Two rAFs let the CSS rise+fade run when motion is on.
+    requestAnimationFrame(function(){ requestAnimationFrame(function(){
+       notice.classList.add("is-shown");
+      }); });
+    hideTimer = setTimeout(hide, 6000);   // self-removing, non-blocking
+    }
+  function hide(){
+    notice.classList.remove("is-shown");
+    var done = function(){ notice.hidden = true; };
+     if (mq.matches) done();              // no transition under reduced-motion (A13)
+     else setTimeout(done, 200);
+    }
+
+   // Keyboard-dismissable (A11): Esc dismisses; the notice is NON-modal and never traps focus.
+  document.addEventListener("keydown", function(e){
+    if (e.key === "Escape" && !notice.hidden){ close.focus(); hide(); }
+    });
+  close.addEventListener("click", hide);
+  fire.addEventListener("click", show);
+
+   Array.prototype.forEach.call(document.querySelectorAll(".seg [data-n]"), function(b){
+    b.addEventListener("click", function(){
+      Array.prototype.forEach.call(document.querySelectorAll(".seg [data-n]"),
+        function(x){ x.setAttribute("aria-pressed","false"); });
+      b.setAttribute("aria-pressed","true");
+      state = b.dataset.n;
+       renderMessage();
+      });
+    });
+})();
+</script>
+</body>
+</html>
