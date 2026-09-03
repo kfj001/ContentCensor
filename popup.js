@@ -17,11 +17,31 @@
 */
 "use strict";
 
-(function () {
-  var S = (typeof window !== "undefined" && window.CCStorage) ? window.CCStorage : null;
-  var _inited = false;
+ (function () {
+   var S = (typeof window !== "undefined" && window.CCStorage) ? window.CCStorage : null;
+   var _inited = false;
+   var activeTab = null;             // the tab the popup is acting on
+   var enabledSites = [];            // contentCensorSites mirror
 
-  function $id(id) { return document.getElementById(id); }
+   function $id(id) { return document.getElementById(id); }
+
+      // Resolve chrome the same way the onChanged wiring does (window -> globalThis
+      // -> global), so the per-site query works in both a real page and node.
+   function getChrome() {
+     if (typeof window !== "undefined" && window.chrome) return window.chrome;
+     if (typeof globalThis !== "undefined" && globalThis.chrome) return globalThis.chrome;
+     if (typeof global !== "undefined" && global.chrome) return global.chrome;
+     return undefined;
+       }
+
+      /** Exact-host match pattern for a URL, or null for non-web origins. */
+   function siteFor(url) {
+     if (!url) return null;
+     var u;
+     try { u = new URL(url); } catch (_e) { return null; }
+     if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+     return u.origin + "/*";
+       }
 
      // Keep the switch's visible "Replacements on/off" label in sync with its state.
   function reflectLabel(on) {
@@ -96,52 +116,125 @@
           }
 
   function formatUpdated() {
-    var ts = S.state && S.state._updatedAt;
-    if (!ts) return "—";
-    var s = Math.round((Date.now() - ts) / 1000);
-    if (s < 60) return "just now";
-    if (s < 3600) return Math.round(s / 60) + "m ago";
-    return Math.round(s / 3600) + "h ago";
-        }
+     var ts = S.state && S.state._updatedAt;
+     if (!ts) return "—";
+     var s = Math.round((Date.now() - ts) / 1000);
+     if (s < 60) return "just now";
+     if (s < 3600) return Math.round(s / 60) + "m ago";
+     return Math.round(s / 3600) + "h ago";
+           }
+
+       // Per-site opt-in (contentCensorSites): reflect + toggle whether THIS tab's
+       // origin is enabled. The background handler requests the host permission
+       // and injects the content script; we only mirror enabled state here.
+   function renderSite() {
+     var row = $id("cc-site-row");
+     var note = $id("cc-site-note");
+     var unsupported = $id("cc-site-unsupported");
+     var sw = $id("cc-enable-site");
+     if (!row) return;                        // element not in this build (e.g. tests)
+     var site = siteFor(activeTab ? activeTab.url : null);
+     var isOn = !!site && enabledSites.indexOf(site) !== -1;
+     if (!site) {
+       row.hidden = true;
+       note.hidden = true;
+       unsupported.hidden = false;
+       return;
+         }
+     unsupported.hidden = true;
+     row.hidden = false;
+     note.hidden = isOn;
+     if (sw) {
+      sw.setAttribute("aria-checked", String(isOn));
+      var txt = $id("cc-enable-site-text");
+      if (txt) txt.textContent = isOn
+        ? "Enabled on this site"
+        : "Enable on this site";
+         }
+       }
+
+   function queryActiveTab() {
+     var c = getChrome();
+     if (!c || !c.tabs || !c.tabs.query) return;
+     c.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+      activeTab = tabs && tabs[0] ? tabs[0] : null;
+      renderSite();
+        });
+       }
+
+   function loadEnabledSites() {
+     var c = getChrome();
+     if (!c || !c.storage || !c.storage.sync) return;
+     c.storage.sync.get("contentCensorSites", function (items) {
+      enabledSites = (items && items.contentCensorSites) || [];
+      renderSite();
+        });
+       }
+
+   function toggleSite() {
+     var site = siteFor(activeTab ? activeTab.url : null);
+     if (!site) return;
+     var c = getChrome();
+     if (!c || !c.runtime || !c.runtime.sendMessage) return;
+     var next = enabledSites.indexOf(site) === -1;
+     c.runtime.sendMessage({
+       type: "cc-toggle-site", enable: next, origin: site, tabId: activeTab && activeTab.id
+        }, function (resp) {
+         // Mirror the result immediately; onChanged also refreshes renderSite.
+        enabledSites = (resp && resp.enabled)
+          ? (enabledSites.indexOf(site) === -1
+             ? enabledSites.concat(site) : enabledSites)
+          : enabledSites.filter(function (s) { return s !== site; });
+        renderSite();
+          });
+       }
 
   function init() {
-    if (_inited) return;               // P0-3: wire exactly once (idempotent)
-    _inited = true;
-    if (!S) return;
-    S.load(function () {
-      render();
-      var sw = $id("cc-master");
-      if (sw && sw.focus) sw.focus();      // focus on open (A6)
-          });
+     if (_inited) return;                // P0-3: wire exactly once (idempotent)
+     _inited = true;
+     if (!S) return;
+     S.load(function () {
+       render();
+       var sw = $id("cc-master");
+       if (sw && sw.focus) sw.focus();       // focus on open (A6)
+            });
 
-    // P1-1: re-render on a cross-surface change (a rule saved from the options
-    // page must refresh an already-open popup, F-6). Mirror storage.js's dirty
-    // guard so a local unsaved edit is never clobbered by the incoming snapshot.
-    var c = (typeof window !== "undefined" && window.chrome)
-            || (typeof globalThis !== "undefined" && globalThis.chrome)
-            || (typeof global !== "undefined" ? global.chrome : undefined);
+     // Per-site opt-in: discover the active tab + the persisted enabled list.
+     loadEnabledSites();
+     queryActiveTab();
+
+      // P1-1: re-render on a cross-surface change (a rule saved from the options
+      // page must refresh an already-open popup, F-6). Mirror storage.js's dirty
+      // guard so a local unsaved edit is never clobbered by the incoming snapshot.
+     var c = (typeof window !== "undefined" && window.chrome)
+              || (typeof globalThis !== "undefined" && globalThis.chrome)
+             || (typeof global !== "undefined" ? global.chrome : undefined);
     if (c && c.storage && c.storage.onChanged) {
       c.storage.onChanged.addListener(function (changes, area) {
         if (area !== "sync") return;
         if (changes.contentCensorData || changes.enabled) {
           if (!S.state.dirty) S.load(function () { render(); });
           }
-        });
-        }
+        if (changes.contentCensorSites) loadEnabledSites();
+         });
+          }
 
-      var sw = $id("cc-master");
-      if (sw) sw.addEventListener("click", function () {
-        var now = sw.getAttribute("aria-checked") !== "true";
-        sw.setAttribute("aria-checked", String(now));
-        reflectLabel(now);
-        S.setEnabled(now);
-        S.save();
+       var sw = $id("cc-master");
+       if (sw) sw.addEventListener("click", function () {
+         var now = sw.getAttribute("aria-checked") !== "true";
+         sw.setAttribute("aria-checked", String(now));
+         reflectLabel(now);
+         S.setEnabled(now);
+         S.save();
+               });
+
+     var siteToggle = $id("cc-enable-site");
+     if (siteToggle) siteToggle.addEventListener("click", toggleSite);
+
+     var open = $id("cc-open-settings");
+     if (open) open.addEventListener("click", function () {
+       if (chrome.runtime && chrome.runtime.openOptionsPage) chrome.runtime.openOptionsPage();
              });
-
-    var open = $id("cc-open-settings");
-    if (open) open.addEventListener("click", function () {
-      if (chrome.runtime && chrome.runtime.openOptionsPage) chrome.runtime.openOptionsPage();
-          });
 
     var t = $id("cc-toggle-all");
     if (t) t.addEventListener("click", function () {
@@ -168,9 +261,17 @@
           }
           }
 
-          // Expose for tests.
-       if (typeof module !== "undefined" && module.exports) module.exports = {
-         render: render, init: init, previewRows: previewRows, formatUpdated: formatUpdated
-          };
-      }
-      )();
+           // Expose for tests.
+        if (typeof module !== "undefined" && module.exports) module.exports = {
+          render: render,
+          init: init,
+          previewRows: previewRows,
+          formatUpdated: formatUpdated,
+          renderSite: renderSite,
+          siteFor: siteFor,
+          toggleSite: toggleSite,
+          loadEnabledSites: loadEnabledSites,
+          queryActiveTab: queryActiveTab
+            };
+        }
+        )();

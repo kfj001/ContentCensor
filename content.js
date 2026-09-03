@@ -1,13 +1,19 @@
 /*
 * content.js — in-page text replacement (F-2 / F-3; UI §3.3 / §3.4 / §4.4).
 *
-* Loads as a classic content script AFTER rules.js (manifest
-* content_scripts: ["lib/rules.js", "content.js"]). lib/rules.js first sets the
-* pure helpers as globalThis.CCRules, which this file consumes — the single
-* source of truth shared verbatim with the options/popup surfaces. It is
-* dependency-free and CSP-safe on an arbitrary host page (UI §2.3): no jQuery, no
-* import, no CDN, and no innerHTML from untrusted data — every injected node is
-* createElement + textContent.
+ * No longer declared in manifest.content_scripts. It is injected OPT-IN into a
+ * tab by background.js (chrome.scripting.executeScript of lib/rules.js then
+ * content.js) after the user enables the site from the popup. lib/rules.js first
+ * sets the pure helpers as globalThis.CCRules, which this file consumes — the
+ * single source of truth shared verbatim with the options/popup surfaces. It is
+ * dependency-free and CSP-safe on an arbitrary host page (UI §2.3): no jQuery, no
+ * import, no CDN, and no innerHTML from untrusted data — every injected node is
+ * createElement + textContent.
+ *
+ * Site gate: the script only replaces text when its own origin is in
+ * contentCensorSites (the user's opt-in list). Disabled => inert. A re-injection
+ * into an already-live tab is a no-op for observers (idempotency guard) so the
+ * same document never gets stacked observers.
 *
 * Behaviours:
 *   - one Array transform via CCRules.toPatterns (no jQuery — kills C13/C14);
@@ -22,19 +28,41 @@
 */
 "use strict";
 
-(function () {
-  var CCRules = (typeof window !== "undefined" && window.CCRules)
-       ? window.CCRules
-       : { toPatterns: function (d) { return d || []; } };
+ (function () {
+    // Idempotency guard: a re-injection into an ALREADY-live tab (the background
+    // service worker's tabs.onUpdated can fire executeScript again for the same
+    // document) must not stack a second observer or double-replace. lib/rules.js
+    // is re-injected before each content.js, so the marker lives on the window and
+    // survives across the rules.js/content.js pair.
+    if (typeof window !== "undefined" && window.__ccInstalled) return;
+    if (typeof window !== "undefined") window.__ccInstalled = true;
 
-   // ---- module state --------------------------------------------------------
-  var patterns = [];            // [{re, replacement}]
-  var applying = false;         // re-entrancy latch (A12)
-  var cycleDetected = false;
-  var cycleToastShown = false;
-  var toastEnabled = false;     // opt-in (F-3 / A11); off by default
-  var reducedMotion = false;
-  var observer = null;
+     var CCRules = (typeof window !== "undefined" && window.CCRules)
+        ? window.CCRules
+         : { toPatterns: function (d) { return d || []; } };
+
+     // ---- module state --------------------------------------------------------
+   var patterns = [];             // [{re, replacement}]
+   var applying = false;          // re-entrancy latch (A12)
+   var cycleDetected = false;
+   var cycleToastShown = false;
+   var toastEnabled = false;      // opt-in (F-3 / A11); off by default
+   var reducedMotion = false;
+    var observer = null;
+     var selfMatch = null;            // this tab's exact-host match, or null.
+
+        // Resolve this tab's site once, up front, so applyData's gate sees it.
+     selfMatch = selfSite();
+
+     /** This tab's exact-host match pattern ("https://host/*"), or null for a
+      * non-http(s) origin the script can't act on. Mirrors background.js. */
+   function selfSite() {
+    if (typeof window === "undefined" || !window.location) return null;
+     var u;
+    try { u = new URL(window.location.href); } catch (_e) { return null; }
+    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+    return u.origin + "/*";
+   }
 
    /**
     * Rewrite one text node at most once per observer cycle. Apply every pattern,
@@ -143,35 +171,47 @@
     * Build the pattern list + (re)start the observer from a storage snapshot.
     * Honours the master enabled flag (Q2).
     */
-  function applyData(items) {
-    var data = items && items.contentCensorData;
-    var enabled = !items || items.enabled === undefined || items.enabled === true;
-    patterns = enabled ? CCRules.toPatterns(data) : [];
-    stopObserver();
+   function applyData(items) {
+     items = items || {};
+     var data = items.contentCensorData;
+      var enabled = items.enabled === undefined ? true : items.enabled;
+    // Site gate: only replace when this tab's origin is in the user's opt-in
+   // list. When `selfMatch` is null (node/jsdom without chrome, or a
+   // direct-call test) the gate is not enforced — the caller owns the data.
+     var sites = items.contentCensorSites;
+     if (selfMatch && (!sites || sites.indexOf(selfMatch) === -1)) {
+      patterns = [];
+      stopObserver();
+      cycleDetected = false;
+      applying = false;
+      return;
+      }
+     patterns = enabled ? CCRules.toPatterns(data) : [];
+     stopObserver();
      cycleDetected = false;
-    applying = false;
-    ensureObserver();
-    // P1-2: the observer only CATCHES future mutations. Replace any text that was
-    // already present at injection time (static content, SPA hydration, cached
-    // pages) with a one-time walk over the current snapshot. The master flag is
-    // honoured because `patterns` is [] when disabled; the text-node-only walk
-    // (A14) keeps host semantics intact.
-    if (document.body) walk(document.body);
+     applying = false;
+     ensureObserver();
+      // P1-2: the observer only CATCHES future mutations. Replace any text that
+     // was already present at injection time (static content, SPA hydration,
+     // cached pages) with a one-time walk over the current snapshot. The master
+     // flag is honoured because `patterns` is [] when disabled; the text-node-only
+     // walk (A14) keeps host semantics intact.
+     if (document.body) walk(document.body);
       }
 
   function loadAndRun() {
-    if (typeof chrome === "undefined" || !chrome.storage || !chrome.storage.sync) return;
-    chrome.storage.sync.get(["contentCensorData", "enabled", "contentCensorProfile"],
-      function (items) {
+     if (typeof chrome === "undefined" || !chrome.storage || !chrome.storage.sync) return;
+    chrome.storage.sync.get(["contentCensorData", "enabled", "contentCensorProfile", "contentCensorSites"],
+       function (items) {
         items = items || {};
         toastEnabled = !!(items.contentCensorProfile && items.contentCensorProfile.toast);
-        if (window.matchMedia) {
-          try { reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches; }
-          catch (_e) { reducedMotion = false; }
-          }
-        applyData(items);
-       });
-    }
+         if (window.matchMedia) {
+        try { reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches; }
+        catch (_e) { reducedMotion = false; }
+         }
+         applyData(items);
+         });
+      }
 
     // React to edits from options/popup without a full page reload (F-6).
     // `chrome` here is the global — NOT a module-scope var (a `var chrome`
@@ -180,16 +220,17 @@
   if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.onChanged) {
     chrome.storage.onChanged.addListener(function (changes, area) {
       if (area !== "sync") return;
-      if (changes.contentCensorData || changes.enabled || changes.contentCensorProfile) {
-        chrome.storage.sync.get(["contentCensorData", "enabled", "contentCensorProfile"],
-          function (items) {
+       if (changes.contentCensorData || changes.enabled || changes.contentCensorProfile
+             || changes.contentCensorSites) {
+         chrome.storage.sync.get(["contentCensorData", "enabled", "contentCensorProfile", "contentCensorSites"],
+           function (items) {
             items = items || {};
             toastEnabled = !!(items.contentCensorProfile && items.contentCensorProfile.toast);
             applyData(items);
+             });
+          }
            });
-       }
-      });
-    }
+        }
 
    // Initial pass: run now if body exists, else on DOMContentLoaded.
   if (typeof document !== "undefined") {

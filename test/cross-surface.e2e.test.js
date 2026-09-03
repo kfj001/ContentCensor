@@ -140,12 +140,13 @@ test("F-6 contract: atomic save writes all 3 fields, no clear()", async () => {
 // After the fix, applyData runs a one-time walk(document.body) after ensureObserver,
 // so the static "GOP" text present at injection time IS replaced on first load.
 test("F-5→F-3: content.js walks the initial DOM and replaces static text on load", async () => {
-  const chrome = makeChromeMock({
+   const chrome = makeChromeMock({
     contentCensorData: [
-      { id: "1", find: "GOP", replace: "CUNT", matchType: "text", enabled: true },
-    ],
+       { id: "1", find: "GOP", replace: "CUNT", matchType: "text", enabled: true },
+      ],
+    contentCensorSites: ["https://example.com/*"],
     enabled: true,
-  });
+    });
   const r = loadContentPage(
     "<!DOCTYPE html><html><body><p>the GOP was here</p></body></html>",
     chrome._store,
@@ -165,12 +166,13 @@ test("F-5→F-3: content.js walks the initial DOM and replaces static text on lo
 // walk(document.body) so static text present at injection time IS replaced
 // ("hello" → "world").
 test("F-3: content.js walks pre-existing DOM and replaces static text on load", async () => {
-  const chrome = makeChromeMock({
+   const chrome = makeChromeMock({
     contentCensorData: [
-          { id: "1", find: "hello", replace: "world", matchType: "text", enabled: true },
-        ],
+             { id: "1", find: "hello", replace: "world", matchType: "text", enabled: true },
+           ],
+    contentCensorSites: ["https://example.com/*"],
     enabled: true,
-     });
+        });
   const r = loadContentPage(
        "<!DOCTYPE html><html><body><p>hello</p></body></html>",
      chrome._store,

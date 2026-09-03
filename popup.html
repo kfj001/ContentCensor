@@ -11,7 +11,23 @@
    <main id="main" aria-labelledby="cc-h1">
      <h1 id="cc-h1">Content Censor</h1>
 
-     <p id="cc-lede" class="cc-lede">Replace terms on the pages you visit.</p>
+     <p id="cc-lede" class="cc-lede">Replacements are opt-in per site. Enable them on the pages you visit.</p>
+
+     <section aria-label="This page" id="cc-site-section">
+       <div class="cc-switch-row" id="cc-site-row" hidden>
+         <button id="cc-enable-site" type="button" role="switch" aria-checked="false"
+                 aria-label="Enable replacements on this site">
+           <span class="cc-switch-track"><span class="cc-switch-thumb"></span></span>
+           <span id="cc-enable-site-text" class="cc-switch-text">Enable on this site</span>
+         </button>
+       </div>
+       <p id="cc-site-note" class="cc-lede" hidden>
+        Content Censor is off on this page — enable it to replace terms here.
+       </p>
+       <p id="cc-site-unsupported" class="cc-lede" hidden>
+        Replacements work only on web pages (http/https) — this tab can't be enabled.
+       </p>
+    </section>
 
      <section aria-label="Replacements status">
        <div class="cc-switch-row">
