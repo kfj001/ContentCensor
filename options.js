@@ -47,25 +47,34 @@
   var seen = {};
   var total = rows.length;
 
-  for (var i = 0; i < rows.length; i++) {
-    var r = rows[i];
-    var el = grid.querySelector('cc-rule-row[data-rid="' + r.id + '"]');
-    if (!el) {
-      if (window.CcRuleRow && typeof window.CcRuleRow === "function") el = new window.CcRuleRow();
+   for (var i = 0; i < rows.length; i++) {
+     var r = rows[i];
+     var el = grid.querySelector('cc-rule-row[data-rid="' + r.id + '"]');
+     if (!el) {
+       if (window.CcRuleRow && typeof window.CcRuleRow === "function") el = new window.CcRuleRow();
       else el = document.createElement("cc-rule-row");
-      el.dataset.rid = r.id;
-      el.id = r.id;
-      grid.appendChild(el);
+       el.dataset.rid = r.id;
+       el.id = r.id;
+       grid.appendChild(el);
+          }
+      // "Rule N of M" caption (A15) — attribute-reactive.
+     el.setAttribute("index", String(i));
+     el.setAttribute("total", String(total));
+      // Bind the configured values into the LIVE input controls via the row's
+      // public `values` setter (UI §4.2 two-way contract), NOT via raw
+      // setAttribute — the attribute→input reflection (attributeChangedCallback)
+      // is unreliable across the render/append lifecycle, so the inputs would
+      // stay empty instead of showing the saved replacements (QA P1). The
+      // setter drives find/replace/matchType/caseSensitive/enabled + validates.
+     el.values = {
+       find: r.find || "",
+       replace: r.replace || "",
+       matchType: r.matchType || "text",
+       caseSensitive: r.caseSensitive === true,
+       enabled: r.enabled !== false
+          };
+     seen[r.id] = true;
        }
-    el.setAttribute("index", String(i));
-    el.setAttribute("total", String(total));
-    el.setAttribute("find", r.find || "");
-    el.setAttribute("replace", r.replace || "");
-    el.setAttribute("matchtype", r.matchType || "text");
-    el.setAttribute("case-sensitive", r.caseSensitive ? "true" : "false");
-    el.setAttribute("disabled", r.enabled === false ? "true" : "false");
-    seen[r.id] = true;
-     }
 
      // Drop removed rows.
   Array.prototype.slice.call(grid.querySelectorAll("cc-rule-row")).forEach(function (el) {
