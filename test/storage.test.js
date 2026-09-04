@@ -74,27 +74,37 @@ test("save keeps dirty=true on a forced quota/lastError failure (no data loss)",
   assert.strictEqual(S.state.dirty, true, "failure keeps the user able to retry");
 });
 
-test("save persists only enabled + non-empty-find rows", async () => {
+test("save persists defined (non-empty-find) rows — including disabled ones", async () => {
   global.chrome = makeChromeMock();
   const S = loadStorage();
   S.load(() => {});
   await run();
-  S.addRow(); S.state.rows[0].find = "keep"; S.state.rows[0].replace = "K";
-  S.addRow(); S.state.rows[1].find = "";                          // dropped
-  S.addRow(); S.state.rows[2].find = "hi"; S.state.rows[2].enabled = false; // dropped
+  S.addRow(); S.state.rows[0].find = "keep"; S.state.rows[0].replace = "K";    // active
+  S.addRow(); S.state.rows[1].find = "";                                       // dropped (blank)
+  S.addRow(); S.state.rows[2].find = "hi"; S.state.rows[2].enabled = false;     // saved, disabled
   S.save();
   await run();
   const saved = global.chrome._store.contentCensorData;
-  assert.strictEqual(saved.length, 1);
+  assert.strictEqual(saved.length, 2, "non-blank rows persist (active + disabled); only the blank find is dropped");
   assert.strictEqual(saved[0].find, "keep");
+  assert.strictEqual(saved[1].find, "hi", "the disabled 'hi' row survives a save");
+  assert.strictEqual(saved[1].enabled, false, "its enabled flag is preserved so 'defined' > 'active' survives a reload");
 });
 
-test("setEnabled flips the profile flag and marks dirty", async () => {
-  global.chrome = makeChromeMock();
-  const S = loadStorage({ enabled: true });
-  S.load(() => {});
+test("load migrates rows and exposes no global enabled flag", async () => {
+  global.chrome = makeChromeMock({
+    contentCensorData: [{ find: "go", replace: "stop", enabled: true }],
+    enabled: true
+    });
+  const S = loadStorage({
+    contentCensorData: [{ find: "go", replace: "stop", enabled: true }],
+    enabled: true
+    });
+  let captured;
+  S.load((state) => { captured = state; });
   await run();
-  S.setEnabled(false);
-  assert.strictEqual(S.state.enabled, false);
-  assert.strictEqual(S.state.dirty, true);
+  assert.strictEqual(captured.rows.length, 1, "the rule migrated");
+  assert.strictEqual(captured.rows[0].find, "go");
+  assert.strictEqual(captured.enabled, undefined, "no global enabled flag is loaded");
+  assert.strictEqual(typeof S.setEnabled, "undefined", "setEnabled is gone (no global flag)");
 });

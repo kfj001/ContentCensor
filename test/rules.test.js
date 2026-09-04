@@ -69,25 +69,21 @@ test("toPatterns drops disabled + empty-find rows and invalid regex (defect #1/#
   assert.strictEqual(p[0].replacement, "stop");
 });
 
-test("serializeSync persists only enabled+non-empty rows, never calls clear() (M1)", () => {
+test("serializeSync persists non-empty rows (incl. disabled), never calls clear() (M1)", () => {
   const out = R.serializeSync({
-     enabled: true,
      rows: [
-        { id: "1", find: "go", replace: "stop", enabled: true },
-        { id: "2", find: "", replace: "x" },              // dropped
-        { id: "3", find: "hi", replace: "y", enabled: false } // dropped
-      ]
-   });
-  assert.strictEqual(out.contentCensorData.length, 1);
+             { id: "1", find: "go", replace: "stop", enabled: true },
+             { id: "2", find: "", replace: "x" },                       // dropped (blank find)
+             { id: "3", find: "hi", replace: "y", enabled: false }      // kept, disabled
+         ]
+     });
+  assert.strictEqual(out.contentCensorData.length, 2, "blank-find row dropped; disabled row kept");
   assert.ok(out.updatedAt > 0, "carries a timestamp");
-  assert.strictEqual(out.enabled, true);
-  // No parallel arrays: the shape is exactly {contentCensorData, enabled, updatedAt}.
-  assert.deepStrictEqual(Object.keys(out).sort(), ["contentCensorData", "enabled", "updatedAt"]);
-});
-
-test("serializeSync: enabled=false flag is persisted", () => {
-  const out = R.serializeSync({ enabled: false, rows: [] });
-  assert.strictEqual(out.enabled, false);
+   assert.strictEqual(out.enabled, undefined, "no global enabled flag is persisted");
+  const hi = out.contentCensorData.find((r) => r.find === "hi");
+  assert.strictEqual(hi.enabled, false, "disabled row's enabled flag is preserved");
+   // No parallel arrays: the shape is exactly {contentCensorData, updatedAt}.
+  assert.deepStrictEqual(Object.keys(out).sort(), ["contentCensorData", "updatedAt"]);
 });
 
 test("defaultRules returns six seeded example rules (F-5)", () => {

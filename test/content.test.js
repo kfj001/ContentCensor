@@ -1,11 +1,11 @@
 /*
- * test/content.test.js — content.js F-2 text replacement via jsdom:
- *  - the §4.4 transform applies enabled+non-empty rules by RegExp,
- *  - the MutationObserver catches later DOM changes,
- *  - the re-entrancy guard stops a self-matching pair (A12: "cycle detected"),
- *  - the master enabled flag makes the ruleset inert (Q2),
- *  - no parallel arrays (one Array transform, UI §4.4).
- */
+  * test/content.test.js — content.js F-2 text replacement via jsdom:
+  *   - the §4.4 transform applies enabled+non-empty rules by RegExp,
+  *   - the MutationObserver catches later DOM changes,
+  *   - the re-entrancy guard stops a self-matching pair (A12: "cycle detected"),
+  *   - a disabled per-rule flag makes that rule inert (no global on/off gate),
+  *   - no parallel arrays (one Array transform, UI §4.4).
+  */
 "use strict";
 
 const { test } = require("node:test");
@@ -60,22 +60,22 @@ test("regex rule compiles and replaces globally", async () => {
   assert.strictEqual(text.nodeValue, "N and N");
 });
 
-test("disabled rule is inert and the master enabled flag halts the ruleset (Q2)", async () => {
+test("a disabled rule is inert", async () => {
   const { win, store } = loadContent();
   const rules = [{ id: "a", find: "go", replace: "STOP", matchType: "text", enabled: false }];
   await flushWin(win);
-  win.__ccContent.applyData({ contentCensorData: rules, enabled: true });
+  win.__ccContent.applyData({ contentCensorData: rules });
   const t1 = win.document.createTextNode("go");
   win.document.body.appendChild(t1);
   await flushWin(win);
-  assert.strictEqual(t1.nodeValue, "go", "disabled rule did nothing");
+  assert.strictEqual(t1.nodeValue, "go", "a disabled rule did nothing");
 
   const enabledRules = [{ id: "a", find: "go", replace: "STOP", matchType: "text", enabled: true }];
-  win.__ccContent.applyData({ contentCensorData: enabledRules, enabled: false });
+  win.__ccContent.applyData({ contentCensorData: enabledRules });
   const t2 = win.document.createTextNode("go");
   win.document.body.appendChild(t2);
   await flushWin(win);
-  assert.strictEqual(t2.nodeValue, "go", "master enabled=false makes the ruleset inert");
+  assert.strictEqual(t2.nodeValue, "STOP", "an enabled rule replaces");
 });
 
 test("re-entrancy guard stops a self-matching pair instead of hanging (A12)", async () => {

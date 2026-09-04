@@ -63,16 +63,15 @@ async function loadOptionsPage(opts) {
   await settle(win);
 
   const d = win.document;
-  const els = {
-    grid: d.getElementById("cc-grid"),
-    add: d.getElementById("cc-add"),
-    save: d.getElementById("cc-save"),
-    master: d.getElementById("cc-master"),
-    summary: d.getElementById("cc-summary"),
-    message: d.getElementById("cc-message"),
-    empty: d.getElementById("cc-empty"),
-    dirty: d.getElementById("cc-dirty"),
-      };
+   const els = {
+     grid: d.getElementById("cc-grid"),
+     add: d.getElementById("cc-add"),
+     save: d.getElementById("cc-save"),
+     summary: d.getElementById("cc-summary"),
+     message: d.getElementById("cc-message"),
+     empty: d.getElementById("cc-empty"),
+     dirty: d.getElementById("cc-dirty"),
+       };
   return { win, chrome, dom, document: d, api, els };
 }
 
@@ -122,49 +121,58 @@ function fireWin(win, el, type, opts) {
 
 // The default options page markup (mirrors options.html's element ids).
 function defaultOptionsHtml() {
-  return [
-       "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\"></head>",
-       "<body>",
-       "  <main id=\"main\"><h1>Content Censor — Settings</h1>",
-       "   <section aria-labelledby=\"master-label\">",
-       "    <h2 id=\"master-label\">Status</h2>",
-       "    <div class=\"cc-switch-row\">",
-       "     <button id=\"cc-master\" type=\"button\" role=\"switch\" aria-checked=\"true\" aria-label=\"Apply replacements on this profile\"></button>",
-       "     <p id=\"cc-message\" role=\"status\" aria-live=\"polite\" hidden></p>",
-       "    </div>",
-       "    <p id=\"cc-summary\" role=\"status\" aria-live=\"polite\">0 terms active · last updated —</p>",
-       "    <p id=\"cc-dirty\" role=\"status\" aria-live=\"polite\" class=\"cc-dirty\" hidden>Unsaved</p>",
-       "   </section>",
-       "   <section aria-labelledby=\"rules-label\">",
-       "    <div class=\"cc-toolbar\">",
-       "     <h2 id=\"rules-label\">Replacement rules</h2>",
-       "     <button id=\"cc-toggle-all\" type=\"button\">Toggle all</button>",
-       "     <button id=\"cc-add\" type=\"button\">+ Add rule</button>",
-       "     <button id=\"cc-save\" type=\"button\" disabled>Save</button>",
-       "    </div>",
-       "    <ul id=\"cc-grid\" role=\"list\" aria-label=\"Replacement rules\" class=\"cc-grid\"></ul>",
-       "    <p id=\"cc-empty\" class=\"cc-empty\" hidden>No rules yet — add first replacement.</p>",
-       "   </section></main>",
-       "</body></html>"].join("\n");
+   return [
+        "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\"></head>",
+        "<body>",
+         "    <main id=\"main\"><h1><span class=\"cc-word--content\">Content</span> <span class=\"cc-word--censor\">Censor</span> — Settings</h1>",
+        "    <section aria-labelledby=\"status-label\">",
+        "     <h2 id=\"status-label\">Status</h2>",
+        "      <p id=\"cc-message\" role=\"status\" aria-live=\"polite\" hidden></p>",
+        "      <p id=\"cc-summary\" role=\"status\" aria-live=\"polite\">0 terms active · last updated —</p>",
+        "      <p id=\"cc-dirty\" role=\"status\" aria-live=\"polite\" class=\"cc-dirty\" hidden>Unsaved</p>",
+        "    </section>",
+        "    <section aria-labelledby=\"rules-label\">",
+        "     <div class=\"cc-toolbar\">",
+        "      <h2 id=\"rules-label\">Replacement rules</h2>",
+        "      <button id=\"cc-toggle-all\" type=\"button\">Toggle all</button>",
+        "      <button id=\"cc-add\" type=\"button\">+ Add rule</button>",
+        "      <button id=\"cc-save\" type=\"button\" disabled>Save</button>",
+        "     </div>",
+        "     <ul id=\"cc-grid\" role=\"list\" aria-label=\"Replacement rules\" class=\"cc-grid\"></ul>",
+        "     <p id=\"cc-empty\" class=\"cc-empty\" hidden>No rules yet — add first replacement.</p>",
+        "    </section></main>",
+        "</body></html>"].join("\n");
 }
 
 // The default popup markup (mirrors popup.html's element ids).
 function defaultPopupHtml() {
-  return [
-       "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\"></head>",
-       "<body class=\"cc-popup\">",
-       " <main id=\"main\" aria-labelledby=\"cc-h1\">",
-       "  <h1 id=\"cc-h1\">Content Censor</h1>",
-       "  <p id=\"cc-lede\" class=\"cc-lede\">Replace terms on the pages you visit.</p>",
-       "  <section aria-label=\"Replacements status\">",
-       "   <button id=\"cc-master\" type=\"button\" role=\"switch\" aria-checked=\"true\" aria-labelledby=\"cc-h1\" aria-label=\"Apply replacements on this profile\"></button>",
-       "   <p id=\"cc-summary\" role=\"status\" aria-live=\"polite\">0 terms active · last updated —</p>",
-       "   <button id=\"cc-open-settings\" type=\"button\" class=\"cc-primary\">Open settings</button>",
-       "   <button id=\"cc-toggle-all\" type=\"button\">Toggle all</button>",
-       "  </section>",
-       "  <p id=\"cc-h2\" class=\"cc-h2\" role=\"heading\" aria-level=\"2\">Active terms</p>",
-       "  <ul id=\"cc-preview\" role=\"list\" aria-label=\"First three active replacement terms\"></ul>",
-       " </main></body></html>"].join("\n");
+   return [
+        "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\"></head>",
+        "<body class=\"cc-popup\">",
+        " <main id=\"main\" aria-labelledby=\"cc-h1\">",
+         "    <h1 id=\"cc-h1\"><span class=\"cc-word--content\">Content</span> <span class=\"cc-word--censor\">Censor</span></h1>",
+        "   <p id=\"cc-lede\" class=\"cc-lede\">Replace terms on the pages you visit.</p>",
+        "   <section aria-label=\"This page\" id=\"cc-site-section\">",
+        "    <div class=\"cc-switch-row\" id=\"cc-site-row\" hidden>",
+        "     <button id=\"cc-enable-site\" type=\"button\" role=\"switch\" aria-checked=\"false\" aria-label=\"Enable replacements on this site\"></button>",
+        "    </div>",
+        "    <p id=\"cc-site-note\" class=\"cc-lede\" hidden>Off — enable it.</p>",
+        "    <p id=\"cc-site-unsupported\" class=\"cc-lede\" hidden>Web pages only.</p>",
+        "    <button id=\"cc-reload\" type=\"button\" class=\"cc-primary\" hidden>Reload page</button>",
+        "   </section>",
+        "   <section aria-label=\"Replacements status\">",
+        "    <p id=\"cc-summary\" role=\"status\" aria-live=\"polite\">0 terms active · last updated —</p>",
+        "    <button id=\"cc-open-settings\" type=\"button\" class=\"cc-primary\">Open settings</button>",
+        "    <button id=\"cc-toggle-all\" type=\"button\">Toggle all</button>",
+        "   </section>",
+          "   <p id=\"cc-h2\" class=\"cc-h2\" role=\"heading\" aria-level=\"2\">Replacements</p>",
+          "    <div id=\"cc-terms\" class=\"cc-terms\" role=\"group\" aria-label=\"Active vs. defined replacements\">",
+          "      <span class=\"cc-terms-title\"></span>",
+          "      <div class=\"cc-terms-line cc-terms-active\"><span class=\"cc-terms-count\"></span><span class=\"cc-terms-label\">active</span></div>",
+          "      <div class=\"cc-terms-line cc-terms-defined\"><span class=\"cc-terms-count\"></span><span class=\"cc-terms-label\">defined</span></div>",
+          "      <p class=\"cc-empty\" hidden>No replacements yet.</p>",
+          "    </div>",
+        " </main></body></html>"].join("\n");
 }
 
 module.exports = {

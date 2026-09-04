@@ -115,29 +115,36 @@ test("P0-3 [FIXED] popup.html summary updates on load (init self-invoked)", asyn
           "P0-3 fixed: popup summary is no longer frozen at the markup placeholder");
 });
 
-// P1  Even when wired, render() does not reflect the `find` attribute into the
-//     input, so a raw user `input` event neither marks the page dirty nor triggers
-//     regex validation — the F-2 "edit -> Save" and A4 guard only work through the
-//     public `values` setter / storage API, not through live DOM editing.
-// FIX: have render() set input.value from the attribute (or call row.values=) so
-//     the attribute <-> input stay in sync. AFTER FIX: flip to expect populated inputs.
+// P1  Even when wired, render() used to drive inputs only via setAttribute,
+//     relying on attribute->input reflection (attributeChangedCallback), which
+//     is unreliable on the render/append lifecycle — so configured find/replace
+//     values did NOT reach the input controls when settings opened.
+// FIX: render() now binds configured values into the live inputs via the row's
+//     public `values` setter (UI §4.2 two-way contract) instead of raw
+//     setAttribute, so the attribute <-> input stay in sync.
 // ---------------------------------------------------------------------------
-test("P1 [DEFECT] render() does not sync the find attribute into the input (jsdom)", async () => {
-  const dom = new JSDOM("<!DOCTYPE html><body></body></html>",
-        { runScripts: "outside-only", pretendToBeVisual: true });
-  const win = dom.window; win.chrome = makeChromeMock();
-  win.eval(fs.readFileSync(path.join(ROOT, "lib/rules.js"), "utf8"));
-  win.eval(fs.readFileSync(path.join(ROOT, "cc-rule-row.js"), "utf8"));
-  const row = win.document.createElement("cc-rule-row");
-  row.id = "a"; row.dataset.rid = "a";
-  row.setAttribute("find", "go");
-  win.document.body.appendChild(row);
-  await flush();
-  // The input's value is what attributeChangedCallback is expected to have set.
-  const input = row.querySelector(".cc-find");
-  // NOTE: in a real browser attributeChangedCallback sets input.value; under this
-  // jsdom full-render path it does not. Characterize current behavior.
-  assert.ok(input, "the find input element exists");
-   // (Assertion left loose on purpose: the sync gap is jsdom-specific; the data
-  //  contract tests in options.e2e.test.js use the public setter and pass.)
-});
+// P1 [FIXED] Open settings: each row's inputs reflect the configured
+// find/replace/matchType/case values via the public `values` binding.
+test("P1 [FIXED] render() binds configured values into the input controls", async () => {
+  const { loadOptionsPage } = require("./harness");
+   const r = await loadOptionsPage({
+    initial: {
+      contentCensorData: [
+           { id: "a", find: "go", replace: "stop", matchType: "text", caseSensitive: false, enabled: true },
+           { id: "b", find: "tea", replace: "party", matchType: "regex", caseSensitive: true, enabled: true }
+       ], enabled: true }
+        });
+  const rowA = r.document.querySelector('cc-rule-row[data-rid="a"]');
+  const rowB = r.document.querySelector('cc-rule-row[data-rid="b"]');
+  assert.ok(rowA, "the grid renders the configured rows");
+  assert.strictEqual(rowA.querySelector(".cc-find").value, "go",
+         "row a's find input shows the configured 'go'");
+  assert.strictEqual(rowA.querySelector(".cc-replace").value, "stop",
+         "row a's replace input shows the configured 'stop'");
+  assert.strictEqual(rowB.querySelector(".cc-find").value, "tea",
+         "row b's find input shows the configured 'tea'");
+  assert.ok(rowB.querySelector('input[value="regex"]').checked,
+         "row b's match type reflects its configured regex mode");
+  assert.ok(rowB.querySelector(".cc-case-box").checked,
+         "row b's case-sensitive flag reflects its configured value");
+ });

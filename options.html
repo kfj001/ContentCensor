@@ -8,33 +8,25 @@
 </head>
 <body class="cc-options">
   <main id="main">
-    <h1>Content Censor — Settings</h1>
+      <h1><span class="cc-word--content">Content</span> <span class="cc-word--censor">Censor</span> — Settings</h1>
 
     <p class="cc-lede">
-      Content Censor replaces terms on the web pages you visit with what you choose
+       <span class="cc-word--content">Content</span> <span class="cc-word--censor">Censor</span> replaces terms on the web pages you visit with what you choose
       here. Changes are saved to this profile and apply everywhere you reload a page.
     </p>
 
-    <section aria-labelledby="master-label">
-      <h2 id="master-label">Status</h2>
-      <div class="cc-switch-row">
-        <button id="cc-master" type="button" role="switch" aria-checked="true"
-                aria-label="Apply replacements on this profile">
-          <span class="cc-switch-track"><span class="cc-switch-thumb"></span></span>
-            <span id="cc-switch-text" class="cc-switch-text">Replacements on</span>
-        </button>
-        <!-- A4: aria-live status for saved/dirty/errors. -->
-        <p id="cc-message" role="status" aria-live="polite" hidden></p>
-      </div>
+       <section aria-labelledby="status-label">
+         <h2 id="status-label">Status</h2>
+         <!-- A4: aria-live status for saved/dirty/errors. -->
+         <p id="cc-message" role="status" aria-live="polite" hidden></p>
+         <p id="cc-summary" role="status" aria-live="polite">0 terms active · last updated —</p>
+         <p id="cc-dirty" role="status" aria-live="polite" class="cc-dirty" hidden>
+         You have unsaved changes.
+         </p>
+       </section>
 
-      <p id="cc-summary" role="status" aria-live="polite">0 terms active · last updated —</p>
-      <p id="cc-dirty" role="status" aria-live="polite" class="cc-dirty" hidden>
-        You have unsaved changes.
-      </p>
-    </section>
-
-    <section aria-labelledby="rules-label">
-      <div class="cc-toolbar">
+       <section aria-labelledby="rules-label">
+        <div class="cc-toolbar">
         <h2 id="rules-label">Replacement rules</h2>
         <div class="cc-toolbar-actions">
           <button id="cc-toggle-all" type="button">Toggle all</button>

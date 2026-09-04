@@ -109,15 +109,14 @@ test("F-6 [P1 FIX]: popup re-renders summary on chrome.storage.onChanged", async
        "summary now shows 2 active terms after a second rule was saved cross-surface");
 });
 
-// ── F-6 data contract: atomic save writes contentCensorData + enabled + updatedAt ──
-test("F-6 contract: atomic save writes all 3 fields, no clear()", async () => {
+ // ── F-6 data contract: atomic save writes contentCensorData + updatedAt ──────
+test("F-6 contract: atomic save writes contentCensorData + updatedAt, no clear()", async () => {
   let clearCalled = false;
   const chrome = makeChromeMock({
     contentCensorData: [
-      { id: "a", find: "go", replace: "stop", matchType: "text", enabled: true },
-    ],
-    enabled: true,
-  });
+       { id: "a", find: "go", replace: "stop", matchType: "text", enabled: true },
+     ]
+    });
   chrome.storage.sync.clear = function (cb) { clearCalled = true; if (cb) cb(); };
 
   const r = await loadOptionsPage({ initial: chrome._store });
@@ -127,25 +126,26 @@ test("F-6 contract: atomic save writes all 3 fields, no clear()", async () => {
   r.win.CCStorage.save();
   await new Promise((res) => setTimeout(res, 30));
 
-  // r.chrome is loadOptionsPage's internal mock; check its store
+   // r.chrome is loadOptionsPage's internal mock; check its store
   const written = r.chrome._store;
   assert.ok(
     written.contentCensorData && written.contentCensorData.length === 1,
-    "save wrote exactly 1 active rule");
+     "save wrote exactly 1 active rule");
   assert.strictEqual(typeof written.updatedAt, "number", "save stamped updatedAt");
-  assert.strictEqual(typeof written.enabled, "boolean", "save persisted the enabled flag");
+  assert.strictEqual(written.enabled, undefined, "no global enabled flag is persisted");
 });
 
 // ── F-5 → F-3 content.js walks the initial DOM on load (P1-2 fixed) ──────────
 // After the fix, applyData runs a one-time walk(document.body) after ensureObserver,
 // so the static "GOP" text present at injection time IS replaced on first load.
 test("F-5→F-3: content.js walks the initial DOM and replaces static text on load", async () => {
-  const chrome = makeChromeMock({
+   const chrome = makeChromeMock({
     contentCensorData: [
-      { id: "1", find: "GOP", replace: "CUNT", matchType: "text", enabled: true },
-    ],
+       { id: "1", find: "GOP", replace: "CUNT", matchType: "text", enabled: true },
+      ],
+    contentCensorSites: ["https://example.com/*"],
     enabled: true,
-  });
+    });
   const r = loadContentPage(
     "<!DOCTYPE html><html><body><p>the GOP was here</p></body></html>",
     chrome._store,
@@ -165,12 +165,13 @@ test("F-5→F-3: content.js walks the initial DOM and replaces static text on lo
 // walk(document.body) so static text present at injection time IS replaced
 // ("hello" → "world").
 test("F-3: content.js walks pre-existing DOM and replaces static text on load", async () => {
-  const chrome = makeChromeMock({
+   const chrome = makeChromeMock({
     contentCensorData: [
-          { id: "1", find: "hello", replace: "world", matchType: "text", enabled: true },
-        ],
+             { id: "1", find: "hello", replace: "world", matchType: "text", enabled: true },
+           ],
+    contentCensorSites: ["https://example.com/*"],
     enabled: true,
-     });
+        });
   const r = loadContentPage(
        "<!DOCTYPE html><html><body><p>hello</p></body></html>",
      chrome._store,

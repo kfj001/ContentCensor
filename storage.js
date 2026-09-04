@@ -1,13 +1,14 @@
 /*
 * storage.js — the storage controller (UI §4.1 / §4.3 load + save; M1 / MV3 0.2).
 *
-* The ONLY place the UI reads/writes rules. It owns:
-*    - the state shape { enabled, rows:[{id,find,replace,matchType,caseSensitive,
-*      enabled}], dirty, status } (UI §4.1),
-*    - LOAD + backward-compatible migration of legacy {find,replace,isRegex} rows,
-*    - SAVE as a SINGLE atomic chrome.storage.sync.set (NO chrome.storage.sync.clear
-*      — eliminates the empty-window data-loss race; MV3 Phase 0.2 / A4),
-*    - per-row enable, and persisting only enabled + non-empty-find rules.
+ * The ONLY place the UI reads/writes rules. It owns:
+ *    - the state shape { rows:[{id,find,replace,matchType,caseSensitive,
+ *      enabled}], dirty, status } (UI §4.1),
+ *     - LOAD + backward-compatible migration of legacy {find,replace,isRegex} rows,
+ *     - SAVE as a SINGLE atomic chrome.storage.sync.set (NO chrome.storage.sync.clear
+ *       — eliminates the empty-window data-loss race; MV3 Phase 0.2 / A4),
+ *           - per-row enable, and persisting defined rules (non-empty find, with their
+      *      enabled flag) — so the popup can report "active vs defined".
 *
 * Loaded as a classic extension-page script. `window.CCStorage` exposes the API;
 * `module.exports` exposes the same API to the node test runner (with a chrome
@@ -31,41 +32,37 @@
     return undefined;
       }
 
-    // Fresh projection of what the UI holds; persisted shape == Rules.serializeSync.
-  function freshState() {
-    return { enabled: true, rows: [], dirty: false, status: "idle", _updatedAt: null };
-    }
+      // Fresh projection of what the UI holds; persisted shape == Rules.serializeSync.
+   function freshState() {
+     return { rows: [], dirty: false, status: "idle", _updatedAt: null };
+     }
   var state = freshState();
 
-    /** @returns {Array} a fresh copy of the enabled + non-empty rules (save filter). */
-  function activeRules() {
-    return state.rows
-      .filter(function (r) { return r.enabled !== false && !!r.find; })
-      .map(function (r) {
-        return Rules.normalizeRule(r);
-       });
-    }
+     /** @returns {Array} a fresh copy of every DEFINED rule (non-empty find),
+      including disabled ones — the "defined" count the popup reports. Only blank
+      no-op rows are excluded, mirroring serializeSync's persistence filter. */
+   function definedRules() {
+     return state.rows
+        .filter(function (r) { return !!r.find; })
+        .map(function (r) {
+         return Rules.normalizeRule(r);
+         });
+      }
 
-    /** Read storage, migrate legacy rows into the v3 shape, populate state. */
-  function load(cb) {
-    var c = getChrome();
-    c.storage.sync.get(["contentCensorData", "enabled", "updatedAt", "seededExamples"],
-      function (items) {
-        items = items || {};
-        state.rows = Rules.migrateRules(items.contentCensorData);
-        state.enabled = items.enabled !== false;
-        state.dirty = false;
-        state.status = "idle";
-        state._updatedAt = items.updatedAt || null;
-        state._seededExamples = items.seededExamples || 0;
-      if (cb) cb(state);
-       });
-    }
-
-  function setEnabled(v) {
-    state.enabled = !!v;
-    state.dirty = true;
-    }
+      /** Read storage, migrate legacy rows into the v3 shape, populate state. */
+   function load(cb) {
+     var c = getChrome();
+     c.storage.sync.get(["contentCensorData", "updatedAt", "seededExamples"],
+       function (items) {
+         items = items || {};
+         state.rows = Rules.migrateRules(items.contentCensorData);
+         state.dirty = false;
+         state.status = "idle";
+         state._updatedAt = items.updatedAt || null;
+         state._seededExamples = items.seededExamples || 0;
+       if (cb) cb(state);
+         });
+      }
 
     /** Build one blank Rule and append it. */
   function addRow() {
@@ -115,24 +112,23 @@
   if (c && c.storage && c.storage.onChanged) {
     c.storage.onChanged.addListener(function (changes, area) {
       if (area !== "sync") return;
-      if (changes.contentCensorData || changes.enabled) {
-        if (!state.dirty) load();
-       }
+       if (changes.contentCensorData) {
+         if (!state.dirty) load();
+        }
       });
     }
 
-  var api = {
-    state: state,
-    load: load,
-    save: save,
-    setEnabled: setEnabled,
-    addRow: addRow,
-    removeRow: removeRow,
-    markDirty: markDirty,
-    activeRules: activeRules,
-    normalizeRule: Rules.normalizeRule,
-    newId: Rules.newId
-    };
+   var api = {
+     state: state,
+     load: load,
+     save: save,
+      addRow: addRow,
+      removeRow: removeRow,
+      markDirty: markDirty,
+      definedRules: definedRules,
+      normalizeRule: Rules.normalizeRule,
+      newId: Rules.newId
+      };
 
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   if (typeof window !== "undefined") window.CCStorage = api;

@@ -9,31 +9,48 @@
 
    <!-- A9: semantic landmark + single h1; the switch is a real role="switch". -->
    <main id="main" aria-labelledby="cc-h1">
-     <h1 id="cc-h1">Content Censor</h1>
+      <h1 id="cc-h1"><span class="cc-word--content">Content</span> <span class="cc-word--censor">Censor</span></h1>
 
-     <p id="cc-lede" class="cc-lede">Replace terms on the pages you visit.</p>
+     <p id="cc-lede" class="cc-lede">Replacements are opt-in per site. Enable them on the pages you visit.</p>
 
-     <section aria-label="Replacements status">
-       <div class="cc-switch-row">
-          <button id="cc-master" type="button" role="switch" aria-checked="true"
-                  aria-labelledby="cc-h1"
-                  aria-label="Apply replacements on this profile">
+      <section aria-label="This page" id="cc-site-section">
+        <div class="cc-switch-row" id="cc-site-row" hidden>
+          <button id="cc-enable-site" type="button" role="switch" aria-checked="false"
+                 aria-label="Enable replacements on this site">
             <span class="cc-switch-track"><span class="cc-switch-thumb"></span></span>
-            <span id="cc-switch-text" class="cc-switch-text">Replacements on</span>
+            <span id="cc-enable-site-text" class="cc-switch-text">Enable on this site</span>
           </button>
-       </div>
+        </div>
+        <p id="cc-site-note" class="cc-lede" hidden>
+         <span class="cc-word--content">Content</span> <span class="cc-word--censor">Censor</span> is off on this page — enable it to replace terms here.
+        </p>
+        <p id="cc-site-unsupported" class="cc-lede" hidden>
+        Replacements work only on web pages (http/https) — this tab can't be enabled.
+        </p>
+        <button id="cc-reload" type="button" class="cc-primary" hidden>Reload page</button>
+      </section>
 
-       <!-- A4: aria-live polite summary + F-5 example-rule copy. -->
-       <p id="cc-summary" role="status" aria-live="polite">0 terms active · last updated —</p>
+      <section aria-label="Replacements status">
+        <!-- A4: aria-live polite summary + F-5 example-rule copy. -->
+        <p id="cc-summary" role="status" aria-live="polite">0 terms active · last updated —</p>
 
-       <button id="cc-open-settings" type="button" class="cc-primary">Open settings</button>
+        <button id="cc-open-settings" type="button" class="cc-primary">Open settings</button>
+      </section>
 
-       <button id="cc-toggle-all" type="button">Toggle all</button>
-     </section>
-
-     <p id="cc-h2" class="cc-h2" role="heading" aria-level="2">Active terms</p>
-     <ul id="cc-preview" role="list" aria-label="First three active replacement terms"></ul>
-   </main>
+      <p id="cc-h2" class="cc-h2" role="heading" aria-level="2">Replacements</p>
+      <div id="cc-terms" class="cc-terms" role="group" aria-label="Active vs. defined replacements">
+        <span class="cc-terms-title"></span>
+        <div class="cc-terms-line cc-terms-active">
+          <span class="cc-terms-count"></span>
+          <span class="cc-terms-label">active</span>
+        </div>
+        <div class="cc-terms-line cc-terms-defined">
+          <span class="cc-terms-count"></span>
+          <span class="cc-terms-label">defined</span>
+        </div>
+        <p class="cc-empty" hidden>No replacements yet — add one in settings.</p>
+      </div>
+    </main>
 
    <script src="lib/rules.js"></script>
    <script src="storage.js"></script>

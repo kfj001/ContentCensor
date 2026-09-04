@@ -32,6 +32,10 @@ const htmlFiles = SRC.filter((f) => f.endsWith(".html") || f.endsWith(".htm"));
 const html = htmlFiles.map((f) => fs.readFileSync(path.join(ROOT, f), "utf8")).join("\n");
 const src = files.map((f) => fs.readFileSync(path.join(ROOT, f), "utf8")).join("\n");
 
+// The extension manifest — the opt-in per-site injection invariant is verified
+// structurally here (broad host access is forbidden; the surface must exist).
+const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, "manifest.json"), "utf8"));
+
 // Strip comment lines so gate regexes don't match explanatory text like
 // "no jQuery" written in a doc comment.
 const code = src.split("\n").filter((l) => {
@@ -94,12 +98,57 @@ const gates = [
     name: "5. No inline event handlers in popup/options markup",
     fail: () => htmlNoComments(/\son(click|input|change|load|submit|mouseover|mousedown)\s*=/i),
   },
-  {
-    name: "6. No inline <script>/ <style> in popup/options markup",
-    fail: () =>
-      htmlNoComments(/<script(?![^>]*\bsrc\s*=)/i) ||
-      htmlNoComments(/<style[\s>]/i),
-  },
+    {
+     name: "6. No inline <script>/ <style> in popup/options markup",
+     fail: () =>
+       htmlNoComments(/<script(?![^>]*\bsrc\s*=)/i) ||
+       htmlNoComments(/<style[\s>]/i),
+    },
+      {
+          // Opt-in per-site model: NO broad host access is GRANTED at install
+          // (no host_permissions, <all_urls> out of permissions, no wildcard
+          // content_scripts). Per-site host access is requested at RUNTIME via
+          // chrome.permissions.request({origins:[exactHost]}), which requires a
+          // pool declaration in optional_host_permissions. Chrome still prompts
+          // per-origin and grants only the exact host; content.js self-gates on
+          // contentCensorSites so a non-enabled site stays inert.
+      name: "7. No broad host access at install (no host_permissions/all_urls/wildcard content_scripts; pool declared)",
+      fail() {
+        const perms = manifest.permissions || [];
+        const hostPerms = manifest.host_permissions || [];
+        const broadGrant =
+          perms.includes("<all_urls>") ||
+          hostPerms.includes("<all_urls>") ||
+          hostPerms.length > 0;
+        if (broadGrant) return true;
+        // No content_scripts wildcard (that would inject on every page).
+        const cs = manifest.content_scripts;
+        if (Array.isArray(cs) && cs.some((e) =>
+          Array.isArray(e.matches) && e.matches.some((m) => /https?:\/\/\*\/\*/.test(m))))
+         return true;
+        // The per-site pool must be declared so runtime requests can succeed;
+        // it must be the scheme-pool pattern, never a pre-baked specific host.
+        const pool = manifest.optional_host_permissions || [];
+        if (pool.length === 0) return true;
+        return pool.some((p) =>
+          !/^[a-z\*]:\/\/[a-z\*\/\.\-]+\/*$|^<all_urls>$/i.test(p));
+             },
+       },
+    {
+       // The opt-in injection surface must exist: background.js injects via
+       // chrome.scripting, so it must request a host permission at enable time.
+     name: "8. Opt-in injection surface present (chrome.permissions.request in background.js)",
+     fail() {
+       const bg = fs.readFileSync(path.join(ROOT, "background.js"), "utf8")
+         .split("\n").filter((l) => {
+            const t = l.trim();
+            if (t.startsWith("//") || t.startsWith("*") || t.startsWith("/*"))
+             return false;
+            return true;
+        }).join("\n");
+       return !/permissions\s*\.\s*request/.test(bg);
+          },
+    },
 ];
 
 let failed = 0;

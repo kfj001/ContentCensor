@@ -8,18 +8,28 @@
 */
 
 :root {
-    --cc-fg: #1b1b1b;            /* ink, ~16:1 on white */
-    --cc-fg-dim: #5a5a5a;        /* muted, 7.0:1 — dimmed still >= 4.5:1 */
-    --cc-bg: #ffffff;            /* page / card background */
-    --cc-line: #cfcfcf;          /* light structural lines (1:1 with mockup --border) */
-    --cc-field-line: #b9b9b9;    /* stronger field outline (mockup --border-2) */
-    --cc-surface: #f5f5f4;       /* raised panels / hovers */
-    --cc-accent: #1f7a4d;        /* ON / success / "kinder" (5.6:1 on white) */
-    --cc-danger: #b3261e;        /* error / delete / alert (6.5:1 on white) */
-    --cc-focus: #0b5fd0;         /* keyboard focus ring (>=3:1 UI) */
-    --cc-field-bg: #fff;
-    --cc-radius: 6px;
-    --cc-radius-sm: 4px;
+     /* Brand palette — sampled from contentcensor128.png. The logo is a split
+      * "C/C" mark: an indigo "content" C and a coral "censor" C. The deep shades
+      * (indigo #414164, coral #a01f1f) carry white text / small labels at AA;
+      * the bright shades (#666699 / #ff4e4e) are the highlight accents. */
+     --cc-indigo: #666699;          /* brand "content" C — highlight accent */
+     --cc-indigo-deep: #414164;     /* deep brand indigo — AA fill for white text */
+     --cc-coral: #ff4e4e;           /* brand "censor" C — highlight accent */
+     --cc-coral-deep: #a01f1f;      /* deep brand coral — AA text for danger */
+
+     --cc-fg: #1b1b1b;             /* ink, ~16:1 on white */
+     --cc-fg-dim: #5a5a5a;         /* muted, 7.0:1 — dimmed still >= 4.5:1 */
+     --cc-bg: #ffffff;             /* page / card background */
+     --cc-line: #d6d6e2;           /* indigo-tinted light structural line */
+     --cc-field-line: #b4b4c2;     /* indigo-tinted stronger field outline */
+     --cc-surface: #f3f3f8;        /* indigo-tinted raised panels / hovers */
+     --cc-accent: var(--cc-indigo-deep);  /* ON / success / "kinder" (AA fill) */
+     --cc-accent-bright: var(--cc-indigo);/* brand indigo highlight */
+     --cc-danger: var(--cc-coral-deep);   /* error / delete / alert (AA on white) */
+     --cc-focus: var(--cc-indigo);        /* keyboard focus ring (brand indigo) */
+     --cc-field-bg: #fff;
+     --cc-radius: 6px;
+     --cc-radius-sm: 4px;
 }
 
 * { box-sizing: border-box; }
@@ -42,6 +52,12 @@ body.cc-popup { width: 300px; }
 
 h1 { font-size: 18px; margin: 0 0 6px; }
 h2 { font-size: 15px; margin: 20px 0 12px; font-weight: 600; }
+
+/* Brand wordmark: "content" in brand coral, "censor" in brand indigo — the two
+ * halves of the logo's split mark, kept consistent across every surface. The deep
+ * shades keep both AA on white; the bright shades are the hover/highlight accents. */
+.cc-word--content { color: var(--cc-coral-deep); }
+.cc-word--censor   { color: var(--cc-indigo-deep); }
 
 .cc-lede { color: var(--cc-fg-dim); margin: 0 0 10px; }
 
@@ -143,12 +159,13 @@ button[role="switch"][aria-checked="true"] .cc-switch-thumb { transform: transla
   font: inherit;
   font-weight: 600;
   padding: 6px 14px;
-  border: 1px solid var(--cc-fg);
+  border: 1px solid var(--cc-indigo-deep);
   border-radius: var(--cc-radius-sm);
-  background: var(--cc-fg);
+  background: var(--cc-indigo-deep);
   color: #fff;
   cursor: pointer;
 }
+.cc-primary:hover { background: var(--cc-indigo); border-color: var(--cc-indigo); }
 .cc-primary:disabled {
   background: var(--cc-surface);
   color: var(--cc-fg-dim);
@@ -157,7 +174,8 @@ button[role="switch"][aria-checked="true"] .cc-switch-thumb { transform: transla
 }
 
 /* The Save button reads as the primary action on the options page. */
-#cc-save { background: var(--cc-fg); color: #fff; border-color: var(--cc-fg); }
+#cc-save { background: var(--cc-indigo-deep); color: #fff; border-color: var(--cc-indigo-deep); }
+#cc-save:hover:not(:disabled) { background: var(--cc-indigo); border-color: var(--cc-indigo); }
 #cc-save:disabled {
   background: var(--cc-surface);
   color: var(--cc-fg-dim);
@@ -229,7 +247,7 @@ button[role="switch"][aria-checked="true"] .cc-switch-thumb { transform: transla
   z-index: 1;
   box-shadow: 0 0 0 2px var(--cc-bg), 0 0 0 4px var(--cc-focus);
 }
-.cc-match:has(input:checked) { background: var(--cc-fg); color: #fff; }
+.cc-match:has(input:checked) { background: var(--cc-indigo-deep); color: #fff; }
 
 /* "Match case" — a real, labeled checkbox (off = case-insensitive / "gi"). */
 .cc-case {
@@ -304,20 +322,38 @@ button[role="switch"][aria-checked="true"] .cc-switch-thumb { transform: transla
   border: 0;
 }
 
-/* ---- popup preview ------------------------------------------------------- */
-.cc-preview { list-style: none; margin: 6px 0 0; padding: 0; }
-.cc-preview li { display: flex; gap: 8px; font-size: 13px; padding: 2px 0; }
-.cc-preview-type {
-  align-self: center;
+/* ---- popup status block -------------------------------------------------- */
+/* Two-line "Active / Defined" card: how many replacements are live vs. saved. */
+.cc-terms {
+  margin: 10px 0 0;
+  padding: 12px 14px;
+  background: #fff;
+  border: 1px solid var(--cc-line);
+  border-radius: var(--cc-radius);
+}
+.cc-terms-title {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cc-fg);
+  margin-bottom: 8px;
+}
+.cc-terms-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.cc-terms-count { font-weight: 600; color: var(--cc-fg); min-width: 1.5ch; }
+.cc-terms-label {
   font-size: 11px;
   text-transform: uppercase;
+  letter-spacing: .04em;
   color: var(--cc-fg-dim);
-  border: 1px solid var(--cc-line);
-  border-radius: var(--cc-radius-sm);
-  padding: 0 4px;
-  min-width: 42px;
-  text-align: center;
 }
+.cc-terms-active .cc-terms-count { color: var(--cc-coral-deep); }
+.cc-terms-defined .cc-terms-count { color: var(--cc-indigo-deep); }
 /* Empty-state card (mirrors the mockup .empty). */
 .cc-empty {
   text-align: center;

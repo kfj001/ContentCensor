@@ -25,17 +25,11 @@
   var _inited = false;
   var lastTouchedTag = null;    // control to refocus after a save re-render (A6)
 
-    // Local helper: document.getElementById by id. NOT jQuery — the module is
-    // dependency-free (0 KB, UI §4.3); this wraps only a native call.
-   function byId(id) { return document.getElementById(id); }
+      // Local helper: document.getElementById by id. NOT jQuery — the module is
+      // dependency-free (0 KB, UI §4.3); this wraps only a native call.
+    function byId(id) { return document.getElementById(id); }
 
-    // Keep the switch's visible "Replacements on/off" label in sync with its state.
-   function reflectLabel(on) {
-     var lbl = byId("cc-switch-text");
-     if (lbl) lbl.textContent = "Replacements " + (on ? "on" : "off");
-    }
-
-  function activeCount() {
+   function activeCount() {
     return S.state.rows.filter(function (r) { return r.enabled !== false && !!r.find; }).length;
     }
 
@@ -47,25 +41,34 @@
   var seen = {};
   var total = rows.length;
 
-  for (var i = 0; i < rows.length; i++) {
-    var r = rows[i];
-    var el = grid.querySelector('cc-rule-row[data-rid="' + r.id + '"]');
-    if (!el) {
-      if (window.CcRuleRow && typeof window.CcRuleRow === "function") el = new window.CcRuleRow();
+   for (var i = 0; i < rows.length; i++) {
+     var r = rows[i];
+     var el = grid.querySelector('cc-rule-row[data-rid="' + r.id + '"]');
+     if (!el) {
+       if (window.CcRuleRow && typeof window.CcRuleRow === "function") el = new window.CcRuleRow();
       else el = document.createElement("cc-rule-row");
-      el.dataset.rid = r.id;
-      el.id = r.id;
-      grid.appendChild(el);
+       el.dataset.rid = r.id;
+       el.id = r.id;
+       grid.appendChild(el);
+          }
+      // "Rule N of M" caption (A15) — attribute-reactive.
+     el.setAttribute("index", String(i));
+     el.setAttribute("total", String(total));
+      // Bind the configured values into the LIVE input controls via the row's
+      // public `values` setter (UI §4.2 two-way contract), NOT via raw
+      // setAttribute — the attribute→input reflection (attributeChangedCallback)
+      // is unreliable across the render/append lifecycle, so the inputs would
+      // stay empty instead of showing the saved replacements (QA P1). The
+      // setter drives find/replace/matchType/caseSensitive/enabled + validates.
+     el.values = {
+       find: r.find || "",
+       replace: r.replace || "",
+       matchType: r.matchType || "text",
+       caseSensitive: r.caseSensitive === true,
+       enabled: r.enabled !== false
+          };
+     seen[r.id] = true;
        }
-    el.setAttribute("index", String(i));
-    el.setAttribute("total", String(total));
-    el.setAttribute("find", r.find || "");
-    el.setAttribute("replace", r.replace || "");
-    el.setAttribute("matchtype", r.matchType || "text");
-    el.setAttribute("case-sensitive", r.caseSensitive ? "true" : "false");
-    el.setAttribute("disabled", r.enabled === false ? "true" : "false");
-    seen[r.id] = true;
-     }
 
      // Drop removed rows.
   Array.prototype.slice.call(grid.querySelectorAll("cc-rule-row")).forEach(function (el) {
@@ -179,28 +182,11 @@ els.grid = byId("cc-grid");
      els.summary = byId("cc-summary");
      els.dirtyBanner = byId("cc-dirty");
      els.message = byId("cc-message");
-     els.toggleAll = byId("cc-toggle-all");
-     els.switch = byId("cc-master");
-     els.empty = byId("cc-empty");
-     els.settings = byId("cc-open-settings");
+      els.toggleAll = byId("cc-toggle-all");
+      els.empty = byId("cc-empty");
+      els.settings = byId("cc-open-settings");
 
-      // Master switch (F-1 / Q2): a role="switch" <button> toggles on click via
-      // aria-checked — a <button> has no .checked property and never fires "change".
-      if (els.switch) {
-        var on = S.state.enabled !== false;
-        els.switch.setAttribute("aria-checked", String(on));
-        reflectLabel(on);
-        els.switch.addEventListener("click", function () {
-          var now = els.switch.getAttribute("aria-checked") !== "true";
-          els.switch.setAttribute("aria-checked", String(now));
-          reflectLabel(now);
-          S.setEnabled(now);
-          S.markDirty();
-          updateStatus();
-              });
-            }
-
-        // ---- EXACTLY TWO delegated listeners on the grid (§4.3) --------------
+          // ---- EXACTLY TWO delegated listeners on the grid (§4.3) --------------
      // 1) one click listener: data-action switch (add / delete / toggle-all /
      //    open-settings live OUTSIDE the grid; the per-row Delete is in-grid).
     els.grid.addEventListener("click", function (e) {
@@ -217,11 +203,11 @@ els.grid = byId("cc-grid");
      function forward(evt) {
         var rowEl = evt.target.closest ? evt.target.closest("cc-rule-row") : null;
         if (!rowEl) return;
-        if (evt.type === "cc-row-delete") {
+         if (evt.type === "cc-row-delete") {
           S.removeRow(evt.detail.rowId); S.markDirty(); render();
-            } else if (evt.type === "cc-row-change") {
-          readRow(rowEl); S.markDirty();
-            }
+           } else {
+          readRow(rowEl); S.markDirty(); updateStatus();
+           }
           }
     els.grid.addEventListener("input", forward);
     els.grid.addEventListener("change", forward);
@@ -248,12 +234,11 @@ els.grid = byId("cc-grid");
              }
           });
 
-            // Load, then render, then focus the master switch on open (A6).
-            S.load(function () {
-             render();
-             if (els.switch && els.switch.focus) els.switch.focus();
-                });
-            }
+             // Load, then render (A6 focus was on the master switch, now gone).
+             S.load(function () {
+              render();
+                  });
+              }
 
             // Load-time entry (P0-3): invoke init() when the DOM is ready so the
             // shipped options page renders on its own — the controller no longer

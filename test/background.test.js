@@ -33,10 +33,10 @@ test("seed on install populates an empty store with 6 rules + flags (F-5)", asyn
   bg.seedDefaults();
   await flush(); await flush();
   const store = global.chrome._store;
-  assert.strictEqual(store.contentCensorData.length, 6);
-  assert.strictEqual(store.enabled, true);
-  assert.ok(store.installedAt > 0, "installedAt flag set for the F-5 copy");
-  assert.strictEqual(store.seededExamples, 6);
+   assert.strictEqual(store.contentCensorData.length, 6);
+   assert.strictEqual(store.enabled, undefined, "no global enabled flag is seeded");
+   assert.ok(store.installedAt > 0, "installedAt flag set for the F-5 copy");
+   assert.strictEqual(store.seededExamples, 6);
 });
 
 test("a populated store is NOT re-seeded (idempotent — no data clobber)", async () => {
