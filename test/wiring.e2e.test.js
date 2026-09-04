@@ -127,10 +127,11 @@ test("[P0-3b] popup.html summary updates on load (init self-invoked)", async () 
   await flush(); await flush();
   const summary = win.document.getElementById("cc-summary");
   assert.ok(!/0 terms active/.test(summary.textContent),
-        "summary reflects the ruleset — the controller rendered it (P0-3b fixed)");
-  const preview = win.document.getElementById("cc-preview");
-  assert.ok(preview && preview.children.length === 1,
-        "preview shows the one active rule — the render ran (P0-3b fixed)");
+          "summary reflects the ruleset — the controller rendered it (P0-3b fixed)");
+  const terms = win.document.getElementById("cc-terms");
+  const active = terms && terms.querySelector(".cc-terms-active .cc-terms-count");
+  assert.ok(terms && active && /^1$/.test(active.textContent),
+           "the status block rendered the one active term — the render ran (P0-3b fixed)");
 });
 
 // -------------------------------------------------------------------------

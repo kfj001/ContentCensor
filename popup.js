@@ -8,7 +8,8 @@
  *        the user can refresh a page whose replacements they just disabled,
  *        - a summary line "N terms active · last updated Xh ago" (aria-live polite),
  *        - a primary "Open settings" button -> chrome.runtime.openOptionsPage(),
- *        - a compact read-only preview of the first 3 active rules,
+  *        - a two-line "Active / Defined" terms block (active = enabled, defined =
+  *          all non-blank rules) so the user sees how many are live vs. saved, plus
 *       - on first install (F-5) the summary reads "N example rules loaded —
 *       edit or delete them in Settings" so the seeded defaults read as
  *       *suggestions*, not the user's own rules.
@@ -44,63 +45,72 @@
      return u.origin + "/*";
        }
 
-   function previewRows() {
-    var active = S.state.rows.filter(function (r) {
-      return r.enabled !== false && !!r.find;
-       }).slice(0, 3);
-    return active.map(function (r) {
-      return { find: r.find, replace: r.replace, matchType: r.matchType || "text" };
-      });
-     }
+   function countTerms() {
+     var rows = S.state.rows;
+     var active = 0;
+     var defined = 0;
+     for (var i = 0; i < rows.length; i++) {
+       var r = rows[i];
+       if (!r.find) continue;                 // a blank-find row is no-op, not defined
+       defined++;
+       if (r.enabled !== false) active++;
+        }
+     return { active: active, defined: defined };
+       }
 
   function render() {
-    var active = S.state.rows.filter(function (r) {
-       return r.enabled !== false && !!r.find;
-      });
-    var n = active.length;
+     var counts = countTerms();
+     var n = counts.active;
 
-       // Summary line (A4 aria-live polite; F-5 example-rule copy on first install).
-    var summary = $id("cc-summary");
-    if (summary) {
-      if (S.state._seededExamples && n === S.state._seededExamples && !S.state.dirty) {
-        summary.textContent = S.state._seededExamples + " example rules loaded — "
-            + "edit or delete them in Settings";
-        } else {
-        summary.textContent = n + (n === 1 ? " term active" : " terms active")
-            + " · last updated " + formatUpdated();
+     // Summary line (A4 aria-live polite; F-5 example-rule copy on first install).
+     var summary = $id("cc-summary");
+     if (summary) {
+       if (S.state._seededExamples && n === S.state._seededExamples && !S.state.dirty) {
+         summary.textContent = S.state._seededExamples + " example rules loaded — "
+              + "edit or delete them in Settings";
+           } else {
+         summary.textContent = n + (n === 1 ? " term active" : " terms active")
+              + " · last updated " + formatUpdated();
+           }
+         }
+
+      // Two-line status block: how many replacements are ACTIVE (enabled) vs. DEFINED
+      // (every non-blank rule, disabled or not). Disabled rows now persist, so the
+      // gap between the two numbers is the user's "saved but switched off" set.
+     var block = $id("cc-terms");
+     if (block) {
+       var activeLine = block.querySelector(".cc-terms-active");
+       var activeCount = block.querySelector(".cc-terms-active .cc-terms-count");
+       var definedCount = block.querySelector(".cc-terms-defined .cc-terms-count");
+       if (activeCount) activeCount.textContent = String(counts.active);
+       if (definedCount) definedCount.textContent = String(counts.defined);
+       if (activeLine) {
+         if (counts.active !== counts.defined) {
+            activeLine.setAttribute("title",
+                counts.defined - counts.active + " defined term(s) saved but switched off");
+             } else {
+            activeLine.removeAttribute("title");
+            }
+       }
+       var heading = block.querySelector(".cc-terms-title");
+       if (heading) {
+         heading.textContent = counts.defined === 0 ? "Replacements"
+                 : (counts.defined + " "
+                    + (counts.defined === 1 ? "replacement" : "replacements"));
         }
+      // Empty state: no rule is defined at all — hide the two count lines and
+        // show only the empty card.
+       var empty = block.querySelector(".cc-empty");
+       var hasRows = counts.defined !== 0;
+       if (empty) empty.hidden = hasRows;
+       var lines = block.querySelectorAll(".cc-terms-line");
+       for (var li = 0; li < lines.length; li++) lines[li].hidden = !hasRows;
       }
 
-      // Read-only preview of the first 3 active rules (no parallel arrays — F-3/A2).
-    var list = $id("cc-preview");
-    if (list) {
-      while (list.firstChild) list.removeChild(list.firstChild);
-      if (n === 0) {
-        var none = document.createElement("li");
-        none.className = "cc-empty";
-        none.textContent = "No active terms yet.";
-        list.appendChild(none);
-          } else {
-          previewRows().forEach(function (r) {
-            var li = document.createElement("li");
-            var type = document.createElement("span");
-            type.className = "cc-preview-type";
-            type.textContent = r.matchType === "regex" ? "regex" : "text";
-            type.setAttribute("title", "match type");
-            var match = document.createElement("span");
-            match.className = "cc-preview-pair";
-            match.textContent = "'" + r.find + "' → '" + r.replace + "'";
-            li.appendChild(type);
-            li.appendChild(match);
-            list.appendChild(li);
-             });
-         }
-        }
-
-      // Toggle-all on the popup mirrors the per-row enable; marks dirty + saves.
-    var t = $id("cc-toggle-all");
-    if (t) t.disabled = S.state.rows.length === 0;
-          }
+        // Toggle-all on the popup mirrors the per-row enable; marks dirty + saves.
+     var t = $id("cc-toggle-all");
+     if (t) t.disabled = S.state.rows.length === 0;
+            }
 
   function formatUpdated() {
      var ts = S.state && S.state._updatedAt;
@@ -261,7 +271,7 @@
         if (typeof module !== "undefined" && module.exports) module.exports = {
           render: render,
           init: init,
-          previewRows: previewRows,
+          countTerms: countTerms,
           formatUpdated: formatUpdated,
           renderSite: renderSite,
            siteFor: siteFor,

@@ -63,21 +63,24 @@ test("REG-SEED-1: defaultRules returns 6 seed rules with expected finds", () => 
   assert.ok(finds.includes("GOP"), "includes 'GOP' seed");
 });
 
-// ── Save filter: empty-find rows dropped ──────────────────────────────────────
-test("REG-SAVE-1: serializeSync drops empty-find rows", () => {
+// ── Save filter: blank-find rows dropped; disabled kept as "defined" ───────────
+test("REG-SAVE-1: serializeSync drops blank-find rows, keeps disabled ones", () => {
   const state = {
     enabled: true,
     rows: [
-          { id: "r1", find: "hello", replace: "world", matchType: "text", enabled: true },
-          { id: "r2", find: "", replace: "", matchType: "text", enabled: true },
-          { id: "r3", find: "test", replace: "ok", matchType: "text", enabled: false },
-       ],
-        };
+            { id: "r1", find: "hello", replace: "world", matchType: "text", enabled: true },
+            { id: "r2", find: "", replace: "", matchType: "text", enabled: true },
+            { id: "r3", find: "test", replace: "ok", matchType: "text", enabled: false },
+          ],
+         };
   const serialized = CCRules.serializeSync(state);
-  assert.strictEqual(serialized.contentCensorData.length, 1,
-      "only the enabled non-empty-find rule is serialized");
+  assert.strictEqual(serialized.contentCensorData.length, 2,
+        "the blank-find row is dropped; the active and disabled rows both persist");
   assert.strictEqual(serialized.contentCensorData[0].find, "hello",
-      "the preserved rule is the one with find='hello'");
+       "the active rule with find='hello' is preserved");
+  const disabled = serialized.contentCensorData.find((r) => r.find === "test");
+  assert.ok(disabled, "the disabled rule still persists (so 'defined' > 'active' survives a save)");
+  assert.strictEqual(disabled.enabled, false, "its disabled flag is kept");
 });
 
 // ── Popup summary counts active terms correctly ────────────────────────────────

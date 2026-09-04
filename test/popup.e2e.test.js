@@ -8,20 +8,45 @@ const { test } = require("node:test");
 const assert = require("node:assert");
 const { loadPopupPage, fireWin, settle } = require("./harness");
 
-// F-1: on-open status reflects the ruleset.
-test("F-1 popup renders the active count + first-3 preview", async () => {
+// F-1: on-open status reflects the ruleset (active vs. defined).
+test("F-1 popup renders the active/defined status block", async () => {
   const r = await loadPopupPage({
      initial: {
        contentCensorData: [
-             { id: "a", find: "go", replace: "stop", matchType: "text", enabled: true },
-             { id: "b", find: "tea", replace: "party", matchType: "text", enabled: true },
-             { id: "c", find: "GOP", replace: "x", matchType: "text", enabled: true }],
+              { id: "a", find: "go", replace: "stop", matchType: "text", enabled: true },
+              { id: "b", find: "tea", replace: "party", matchType: "text", enabled: true },
+              { id: "c", find: "GOP", replace: "x", matchType: "text", enabled: true }],
        enabled: true }
-        });
+          });
   const summary = r.document.getElementById("cc-summary");
-  const preview = r.document.getElementById("cc-preview");
+  const terms = r.document.getElementById("cc-terms");
   assert.match(summary.textContent, /3 terms active/, "summary counts 3 active terms");
-  assert.strictEqual(preview.querySelectorAll("li").length, 3, "preview caps at the first 3 rules");
+  assert.strictEqual(terms.querySelectorAll(".cc-terms-line").length, 2,
+         "the status block shows two lines (active / defined)");
+  assert.match(terms.querySelector(".cc-terms-active .cc-terms-count").textContent,
+          /^3$/, "active line counts 3 active terms");
+  assert.match(terms.querySelector(".cc-terms-defined .cc-terms-count").textContent,
+           /^3$/, "defined line counts 3 defined terms");
+});
+
+// A disabled rule counts as DEFINED but NOT active — the gap is the whole point.
+test("F-1 disabled rule shows as defined, not active", async () => {
+  const r = await loadPopupPage({
+     initial: {
+       contentCensorData: [
+               { id: "a", find: "go", replace: "stop", matchType: "text", enabled: true },
+               { id: "b", find: "tea", replace: "party", matchType: "text", enabled: true },
+               { id: "c", find: "GOP", replace: "x", matchType: "text", enabled: false }],
+       enabled: true }
+            });
+  const terms = r.document.getElementById("cc-terms");
+  assert.strictEqual(terms.querySelector(".cc-terms-active .cc-terms-count").textContent,
+          "2", "only the two enabled rules count as active");
+  assert.strictEqual(terms.querySelector(".cc-terms-defined .cc-terms-count").textContent,
+          "3", "all three non-blank rules count as defined, disabled included");
+  const activeLine = terms.querySelector(".cc-terms-active");
+  assert.match(activeLine.getAttribute("title") || "", /saved but switched off/,
+          "a gap between active and defined surfaces a 'saved but switched off' hint");
 });
 
 // The per-site reload button routes a "cc-reload" message to the background,

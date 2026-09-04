@@ -124,7 +124,7 @@ function defaultOptionsHtml() {
    return [
         "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\"></head>",
         "<body>",
-        "   <main id=\"main\"><h1>Content Censor — Settings</h1>",
+         "    <main id=\"main\"><h1><span class=\"cc-word--content\">Content</span> <span class=\"cc-word--censor\">Censor</span> — Settings</h1>",
         "    <section aria-labelledby=\"status-label\">",
         "     <h2 id=\"status-label\">Status</h2>",
         "      <p id=\"cc-message\" role=\"status\" aria-live=\"polite\" hidden></p>",
@@ -150,7 +150,7 @@ function defaultPopupHtml() {
         "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\"></head>",
         "<body class=\"cc-popup\">",
         " <main id=\"main\" aria-labelledby=\"cc-h1\">",
-        "   <h1 id=\"cc-h1\">Content Censor</h1>",
+         "    <h1 id=\"cc-h1\"><span class=\"cc-word--content\">Content</span> <span class=\"cc-word--censor\">Censor</span></h1>",
         "   <p id=\"cc-lede\" class=\"cc-lede\">Replace terms on the pages you visit.</p>",
         "   <section aria-label=\"This page\" id=\"cc-site-section\">",
         "    <div class=\"cc-switch-row\" id=\"cc-site-row\" hidden>",
@@ -165,8 +165,13 @@ function defaultPopupHtml() {
         "    <button id=\"cc-open-settings\" type=\"button\" class=\"cc-primary\">Open settings</button>",
         "    <button id=\"cc-toggle-all\" type=\"button\">Toggle all</button>",
         "   </section>",
-        "   <p id=\"cc-h2\" class=\"cc-h2\" role=\"heading\" aria-level=\"2\">Active terms</p>",
-        "   <ul id=\"cc-preview\" role=\"list\" aria-label=\"First three active replacement terms\"></ul>",
+          "   <p id=\"cc-h2\" class=\"cc-h2\" role=\"heading\" aria-level=\"2\">Replacements</p>",
+          "    <div id=\"cc-terms\" class=\"cc-terms\" role=\"group\" aria-label=\"Active vs. defined replacements\">",
+          "      <span class=\"cc-terms-title\"></span>",
+          "      <div class=\"cc-terms-line cc-terms-active\"><span class=\"cc-terms-count\"></span><span class=\"cc-terms-label\">active</span></div>",
+          "      <div class=\"cc-terms-line cc-terms-defined\"><span class=\"cc-terms-count\"></span><span class=\"cc-terms-label\">defined</span></div>",
+          "      <p class=\"cc-empty\" hidden>No replacements yet.</p>",
+          "    </div>",
         " </main></body></html>"].join("\n");
 }
 

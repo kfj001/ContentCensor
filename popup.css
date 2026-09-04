@@ -53,14 +53,11 @@ body.cc-popup { width: 300px; }
 h1 { font-size: 18px; margin: 0 0 6px; }
 h2 { font-size: 15px; margin: 20px 0 12px; font-weight: 600; }
 
-/* Brand mark: split indigo/coral title echoing the logo's two "C"s. */
-body.cc-popup h1 {
-  display: inline-block;
-  color: var(--cc-indigo-deep);
-  padding-bottom: 4px;
-  border-bottom: 3px solid var(--cc-coral);
-}
-body.cc-options h1 { color: var(--cc-indigo-deep); }
+/* Brand wordmark: "content" in brand coral, "censor" in brand indigo — the two
+ * halves of the logo's split mark, kept consistent across every surface. The deep
+ * shades keep both AA on white; the bright shades are the hover/highlight accents. */
+.cc-word--content { color: var(--cc-coral-deep); }
+.cc-word--censor   { color: var(--cc-indigo-deep); }
 
 .cc-lede { color: var(--cc-fg-dim); margin: 0 0 10px; }
 
@@ -325,20 +322,38 @@ button[role="switch"][aria-checked="true"] .cc-switch-thumb { transform: transla
   border: 0;
 }
 
-/* ---- popup preview ------------------------------------------------------- */
-.cc-preview { list-style: none; margin: 6px 0 0; padding: 0; }
-.cc-preview li { display: flex; gap: 8px; font-size: 13px; padding: 2px 0; }
-.cc-preview-type {
-  align-self: center;
+/* ---- popup status block -------------------------------------------------- */
+/* Two-line "Active / Defined" card: how many replacements are live vs. saved. */
+.cc-terms {
+  margin: 10px 0 0;
+  padding: 12px 14px;
+  background: #fff;
+  border: 1px solid var(--cc-line);
+  border-radius: var(--cc-radius);
+}
+.cc-terms-title {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cc-fg);
+  margin-bottom: 8px;
+}
+.cc-terms-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.cc-terms-count { font-weight: 600; color: var(--cc-fg); min-width: 1.5ch; }
+.cc-terms-label {
   font-size: 11px;
   text-transform: uppercase;
+  letter-spacing: .04em;
   color: var(--cc-fg-dim);
-  border: 1px solid var(--cc-line);
-  border-radius: var(--cc-radius-sm);
-  padding: 0 4px;
-  min-width: 42px;
-  text-align: center;
 }
+.cc-terms-active .cc-terms-count { color: var(--cc-coral-deep); }
+.cc-terms-defined .cc-terms-count { color: var(--cc-indigo-deep); }
 /* Empty-state card (mirrors the mockup .empty). */
 .cc-empty {
   text-align: center;

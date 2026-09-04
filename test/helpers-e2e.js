@@ -107,7 +107,7 @@ function defaultOptionsHtml() {
    return [
         "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\"></head>",
         "<body>",
-        "    <main id=\"main\"><h1>Content Censor — Settings</h1>",
+         "     <main id=\"main\"><h1><span class=\"cc-word--content\">Content</span> <span class=\"cc-word--censor\">Censor</span> — Settings</h1>",
         "      <section aria-labelledby=\"status-label\">",
         "        <h2 id=\"status-label\">Status</h2>",
         "        <p id=\"cc-message\" role=\"status\" aria-live=\"polite\" hidden></p>",

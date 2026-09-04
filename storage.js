@@ -7,7 +7,8 @@
  *     - LOAD + backward-compatible migration of legacy {find,replace,isRegex} rows,
  *     - SAVE as a SINGLE atomic chrome.storage.sync.set (NO chrome.storage.sync.clear
  *       — eliminates the empty-window data-loss race; MV3 Phase 0.2 / A4),
- *     - per-row enable, and persisting only enabled + non-empty-find rules.
+ *           - per-row enable, and persisting defined rules (non-empty find, with their
+      *      enabled flag) — so the popup can report "active vs defined".
 *
 * Loaded as a classic extension-page script. `window.CCStorage` exposes the API;
 * `module.exports` exposes the same API to the node test runner (with a chrome
@@ -37,14 +38,16 @@
      }
   var state = freshState();
 
-    /** @returns {Array} a fresh copy of the enabled + non-empty rules (save filter). */
-  function activeRules() {
-    return state.rows
-      .filter(function (r) { return r.enabled !== false && !!r.find; })
-      .map(function (r) {
-        return Rules.normalizeRule(r);
-       });
-    }
+     /** @returns {Array} a fresh copy of every DEFINED rule (non-empty find),
+      including disabled ones — the "defined" count the popup reports. Only blank
+      no-op rows are excluded, mirroring serializeSync's persistence filter. */
+   function definedRules() {
+     return state.rows
+        .filter(function (r) { return !!r.find; })
+        .map(function (r) {
+         return Rules.normalizeRule(r);
+         });
+      }
 
       /** Read storage, migrate legacy rows into the v3 shape, populate state. */
    function load(cb) {
@@ -119,12 +122,12 @@
      state: state,
      load: load,
      save: save,
-     addRow: addRow,
-     removeRow: removeRow,
-     markDirty: markDirty,
-     activeRules: activeRules,
-     normalizeRule: Rules.normalizeRule,
-     newId: Rules.newId
+      addRow: addRow,
+      removeRow: removeRow,
+      markDirty: markDirty,
+      definedRules: definedRules,
+      normalizeRule: Rules.normalizeRule,
+      newId: Rules.newId
       };
 
   if (typeof module !== "undefined" && module.exports) module.exports = api;
