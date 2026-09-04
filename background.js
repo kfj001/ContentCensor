@@ -41,12 +41,11 @@ const SEED_RULES = [
      console.log("[content-censor] store already populated; keeping user data");
      return;
     }
-   chrome.storage.sync.set({
-     contentCensorData: SEED_RULES,
-     enabled: true,
-     installedAt: Date.now(),
-     seededExamples: SEED_RULES.length
-    }, function () {
+    chrome.storage.sync.set({
+      contentCensorData: SEED_RULES,
+      installedAt: Date.now(),
+      seededExamples: SEED_RULES.length
+      }, function () {
      if (chrome.runtime.lastError) {
        console.warn("[content-censor] seed failed:", chrome.runtime.lastError.message);
       } else {
@@ -95,10 +94,17 @@ const SEED_RULES = [
   chrome.runtime.onInstalled.addListener(seedDefaults);
   chrome.runtime.onStartup.addListener(seedDefaults);
 
-    // Popup -> background: enable/disable a site for the active tab. Async reply,
-    // so return true to keep the message channel open until sendResponse runs.
-  chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
-    if (!msg || msg.type !== "cc-toggle-site" || !msg.origin) return;
+      // Popup -> background: enable/disable a site for the active tab. Async reply,
+      // so return true to keep the message channel open until sendResponse runs.
+   chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
+     if (!msg || msg.type === "cc-reload") {
+        var t = msg.tabId != null ? msg.tabId
+              : (sender && sender.tab && sender.tab.id);
+        if (t != null) chrome.tabs.reload(t);
+        sendResponse({ ok: true });
+        return;
+     }
+     if (!msg || msg.type !== "cc-toggle-site" || !msg.origin) return;
     var enable = msg.enable === true;
     var origin = msg.origin;
     var tabId = msg.tabId != null ? msg.tabId : (sender && sender.tab && sender.tab.id);

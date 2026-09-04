@@ -21,11 +21,12 @@
 *   - a re-entrancy guard stops a self-matching rule pair (A→B, B→A) wedging a
 *     tab: a detected cycle becomes a one-time "Cycle detected — stopped" toast
 *     instead of a hang (M1 / MV3 Phase 0.3 / A12);
-*   - an opt-in, reduced-motion-aware, keyboard-dismissable role="status" toast
-*     (F-3 / A11 / A13) that counts replacements from `patterns` (never a
-*     parallel array), off by default until the user opts in via contentCensorProfile.
-*   - the master `enabled` flag (Q2 / F-1) is honoured: off => inert ruleset.
-*/
+ *  - an opt-in, reduced-motion-aware, keyboard-dismissable role="status" toast
+ *  (F-3 / A11 / A13) that counts replacements from `patterns` (never a
+ *  parallel array), off by default until the user opts in via contentCensorProfile.
+ *  - the only gate is per-site opt-in (contentCensorSites); a site that is
+ *  disabled goes inert live. There is no global on/off flag.
+ */
 "use strict";
 
  (function () {
@@ -167,42 +168,42 @@
     setTimeout(function () { try { el.remove(); } catch (_e) { /* already gone */ } }, 4200);
    }
 
-   /**
-    * Build the pattern list + (re)start the observer from a storage snapshot.
-    * Honours the master enabled flag (Q2).
-    */
+     /**
+      * Build the pattern list + (re)start the observer from a storage snapshot.
+      * Gates on per-site opt-in (contentCensorSites); inert when not opted in.
+      */
    function applyData(items) {
-     items = items || {};
-     var data = items.contentCensorData;
-      var enabled = items.enabled === undefined ? true : items.enabled;
-    // Site gate: only replace when this tab's origin is in the user's opt-in
-   // list. When `selfMatch` is null (node/jsdom without chrome, or a
-   // direct-call test) the gate is not enforced — the caller owns the data.
-     var sites = items.contentCensorSites;
-     if (selfMatch && (!sites || sites.indexOf(selfMatch) === -1)) {
-      patterns = [];
-      stopObserver();
-      cycleDetected = false;
-      applying = false;
-      return;
-      }
-     patterns = enabled ? CCRules.toPatterns(data) : [];
+      items = items || {};
+      var data = items.contentCensorData;
+      // Site gate: only replace when this tab's origin is in the user's opt-in
+     // list. When `selfMatch` is null (node/jsdom without chrome, or a
+     // direct-call test) the gate is not enforced — the caller owns the data.
+     // There is no global on/off flag: the only gate is per-site opt-in.
+      var sites = items.contentCensorSites;
+      if (selfMatch && (!sites || sites.indexOf(selfMatch) === -1)) {
+       patterns = [];
+       stopObserver();
+       cycleDetected = false;
+       applying = false;
+       return;
+        }
+      patterns = CCRules.toPatterns(data);
      stopObserver();
      cycleDetected = false;
      applying = false;
      ensureObserver();
-      // P1-2: the observer only CATCHES future mutations. Replace any text that
-     // was already present at injection time (static content, SPA hydration,
-     // cached pages) with a one-time walk over the current snapshot. The master
-     // flag is honoured because `patterns` is [] when disabled; the text-node-only
-     // walk (A14) keeps host semantics intact.
-     if (document.body) walk(document.body);
+        // P1-2: the observer only CATCHES future mutations. Replace any text that
+       // was already present at injection time (static content, SPA hydration,
+       // cached pages) with a one-time walk over the current snapshot. `patterns`
+       // is [] when the site is not opted in, so the walk is a no-op there; the
+       // text-node-only walk (A14) keeps host semantics intact.
+      if (document.body) walk(document.body);
       }
 
   function loadAndRun() {
-     if (typeof chrome === "undefined" || !chrome.storage || !chrome.storage.sync) return;
-    chrome.storage.sync.get(["contentCensorData", "enabled", "contentCensorProfile", "contentCensorSites"],
-       function (items) {
+      if (typeof chrome === "undefined" || !chrome.storage || !chrome.storage.sync) return;
+     chrome.storage.sync.get(["contentCensorData", "contentCensorProfile", "contentCensorSites"],
+        function (items) {
         items = items || {};
         toastEnabled = !!(items.contentCensorProfile && items.contentCensorProfile.toast);
          if (window.matchMedia) {
@@ -220,10 +221,10 @@
   if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.onChanged) {
     chrome.storage.onChanged.addListener(function (changes, area) {
       if (area !== "sync") return;
-       if (changes.contentCensorData || changes.enabled || changes.contentCensorProfile
-             || changes.contentCensorSites) {
-         chrome.storage.sync.get(["contentCensorData", "enabled", "contentCensorProfile", "contentCensorSites"],
-           function (items) {
+       if (changes.contentCensorData || changes.contentCensorProfile
+              || changes.contentCensorSites) {
+          chrome.storage.sync.get(["contentCensorData", "contentCensorProfile", "contentCensorSites"],
+            function (items) {
             items = items || {};
             toastEnabled = !!(items.contentCensorProfile && items.contentCensorProfile.toast);
             applyData(items);

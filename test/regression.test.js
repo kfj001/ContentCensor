@@ -1,7 +1,7 @@
 /*
  * test/regression.test.js — unit tests that guard existing behaviour.
  * These are the legacy-behaviour anchors: matching, migration,
- * disabled/master inert, and seed-rule integrity.
+ * disabled-rule/empty-ruleset inert, and seed-rule integrity.
  */
 "use strict";
 
@@ -46,12 +46,12 @@ test("REG-DISABLED-1: disabled rule is never matched", () => {
   assert.strictEqual(patterns[0].re.test("a"), false, "disabled rule a does not match");
 });
 
-// ── Master switch off: inert ruleset (caller filters on enabled flag) ─────────
-test("REG-MASTER-OFF-1: when master off, the caller passes [] so zero patterns", () => {
-  // content.js's applyData() does: patterns = enabled ? toPatterns(data) : []
-  const enabled = false;
-  const patterns = enabled ? CCRules.toPatterns([]) : [];
-  assert.strictEqual(patterns.length, 0, "master off: ruleset is inert (no patterns)");
+// ── Empty ruleset inert: an un-opted-in site sees zero patterns ───────────────
+test("REG-EMPTY-1: an empty ruleset (a non-opted-in site) yields zero patterns", () => {
+    // content.js's applyData() passes CCRules.toPatterns(data); when the site is
+    // not in contentCensorSites the gated branch yields [] and the walk is a no-op.
+  const patterns = CCRules.toPatterns([]);
+  assert.strictEqual(patterns.length, 0, "empty ruleset is inert (no patterns)");
 });
 
 // ── Seed rules integrity ─────────────────────────────────────────────────────
@@ -97,24 +97,20 @@ test("REG-POPUP-1: popup summary renders active terms when enabled", async () =>
   assert.match(summary, /2 terms active/, "2 terms active when two enabled rules");
 });
 
-// ── Master off: popup shows the count of active terms (not filtered) ───────────
-// popup.js displays the count of enabled+nonempty rules in state.rows, regardless
-// of the master switch — the master switch only flips the enabled flag, it does
-// not filter the row data. The content script honouring the master is tested
-// separately.
-test("REG-POPUP-2: popup summary shows enabled rules count when master off", async () => {
+// ── Popup summary counts active terms in row data ─────────────────────────────
+// popup.js displays the count of enabled+nonempty rules in state.rows. There is
+// no global on/off flag — the count reflects the row data directly.
+test("REG-POPUP-2: popup summary shows enabled rules count from row data", async () => {
   const r = await loadPopupPage({
-       initial: {
-          contentCensorData: [
-             { id: "a", find: "go", replace: "stop", matchType: "text", enabled: true },
-        ],
-          enabled: false,
-          updatedAt: Date.now(),
-        },
-     });
+        initial: {
+           contentCensorData: [
+                { id: "a", find: "go", replace: "stop", matchType: "text", enabled: true },
+           ],
+           updatedAt: Date.now(),
+          },
+       });
   await new Promise((res) => setTimeout(res, 20));
   const summary = r.document.getElementById("cc-summary").textContent;
-   // The popup shows 1 term active (row still enabled; master off only affects
-   // the content script, not the display count).
-  assert.match(summary, /1 term active/, "popup still shows 1 active term when master off (display not filtered)");
+    // The popup shows 1 term active straight from the row data.
+  assert.match(summary, /1 term active/, "popup shows the active-term count from row data");
 });

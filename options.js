@@ -25,17 +25,11 @@
   var _inited = false;
   var lastTouchedTag = null;    // control to refocus after a save re-render (A6)
 
-    // Local helper: document.getElementById by id. NOT jQuery — the module is
-    // dependency-free (0 KB, UI §4.3); this wraps only a native call.
-   function byId(id) { return document.getElementById(id); }
+      // Local helper: document.getElementById by id. NOT jQuery — the module is
+      // dependency-free (0 KB, UI §4.3); this wraps only a native call.
+    function byId(id) { return document.getElementById(id); }
 
-    // Keep the switch's visible "Replacements on/off" label in sync with its state.
-   function reflectLabel(on) {
-     var lbl = byId("cc-switch-text");
-     if (lbl) lbl.textContent = "Replacements " + (on ? "on" : "off");
-    }
-
-  function activeCount() {
+   function activeCount() {
     return S.state.rows.filter(function (r) { return r.enabled !== false && !!r.find; }).length;
     }
 
@@ -188,28 +182,11 @@ els.grid = byId("cc-grid");
      els.summary = byId("cc-summary");
      els.dirtyBanner = byId("cc-dirty");
      els.message = byId("cc-message");
-     els.toggleAll = byId("cc-toggle-all");
-     els.switch = byId("cc-master");
-     els.empty = byId("cc-empty");
-     els.settings = byId("cc-open-settings");
+      els.toggleAll = byId("cc-toggle-all");
+      els.empty = byId("cc-empty");
+      els.settings = byId("cc-open-settings");
 
-      // Master switch (F-1 / Q2): a role="switch" <button> toggles on click via
-      // aria-checked — a <button> has no .checked property and never fires "change".
-      if (els.switch) {
-        var on = S.state.enabled !== false;
-        els.switch.setAttribute("aria-checked", String(on));
-        reflectLabel(on);
-        els.switch.addEventListener("click", function () {
-          var now = els.switch.getAttribute("aria-checked") !== "true";
-          els.switch.setAttribute("aria-checked", String(now));
-          reflectLabel(now);
-          S.setEnabled(now);
-          S.markDirty();
-          updateStatus();
-              });
-            }
-
-        // ---- EXACTLY TWO delegated listeners on the grid (§4.3) --------------
+          // ---- EXACTLY TWO delegated listeners on the grid (§4.3) --------------
      // 1) one click listener: data-action switch (add / delete / toggle-all /
      //    open-settings live OUTSIDE the grid; the per-row Delete is in-grid).
     els.grid.addEventListener("click", function (e) {
@@ -257,12 +234,11 @@ els.grid = byId("cc-grid");
              }
           });
 
-            // Load, then render, then focus the master switch on open (A6).
-            S.load(function () {
-             render();
-             if (els.switch && els.switch.focus) els.switch.focus();
-                });
-            }
+             // Load, then render (A6 focus was on the master switch, now gone).
+             S.load(function () {
+              render();
+                  });
+              }
 
             // Load-time entry (P0-3): invoke init() when the DOM is ready so the
             // shipped options page renders on its own — the controller no longer

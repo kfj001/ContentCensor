@@ -122,14 +122,18 @@ function makeDom(html, { chrome, setup } = {}) {
         // Chrome MV3 fires chrome.storage.onChanged — real API shape.
         onChanged: { addListener: addChanged }
            },
-      tabs: {
-          _id: 1,
-         _changed: [],
-         onUpdated: {
-           addListener: function (cb) { listeners.onUpdated.push(cb); },
-            _cbs: listeners.onUpdated
-            },
-         query: function (info, cb) {
+       tabs: {
+            _id: 1,
+           _reloads: [],
+           _changed: [],
+          onUpdated: {
+            addListener: function (cb) { listeners.onUpdated.push(cb); },
+              _cbs: listeners.onUpdated
+              },
+          reload: function (tabId) {
+            chrome.tabs._reloads.push(tabId);
+             },
+          query: function (info, cb) {
           // Return the active tab a test can override via chrome.tabs._active.
           setTimeout(function () {
             cb([chrome.tabs._active || {

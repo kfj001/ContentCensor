@@ -161,13 +161,24 @@ test("onUpdated ignores a non-complete status (must wait for 'complete')", async
  });
 
 test("siteFor maps http/https to an exact-host match, ignores non-web origins", () => {
-  loadBg({});                                   // registers listeners; gives us the exported fns
+  loadBg({});                                    // registers listeners; gives us the exported fns
   const bg = require(path.join(ROOT, "background.js"));
   assert.strictEqual(bg.siteFor("about:blank"), null, "about: is not injectable");
   assert.strictEqual(bg.siteFor("chrome://extensions"), null, "chrome: is not injectable");
   assert.strictEqual(bg.siteFor("file:///x/y.html"), null, "file: is not injectable");
   assert.strictEqual(bg.siteFor("https://example.com/path"), "https://example.com/*",
-      "https maps to an exact-host match");
+        "https maps to an exact-host match");
   assert.strictEqual(bg.siteFor("http://a.b.co:8080/"), "http://a.b.co:8080/*",
-      "non-standard ports are preserved in the match");
+        "non-standard ports are preserved in the match");
  });
+
+test("cc-reload message reloads the active tab", async () => {
+  const chrome = loadBg({ contentCensorSites: [] });
+  global.chrome = chrome;
+  const cb = chrome.runtime.onMessage._cbs[0];
+  assert.ok(cb, "cc-reload onMessage listener registered");
+  cb({ type: "cc-reload", tabId: 42 }, { tab: { id: 42 } }, () => {});
+  await drain();
+  assert.deepStrictEqual(chrome.tabs._reloads, [42],
+        "a cc-reload message reloads the target tab");
+});

@@ -1,20 +1,21 @@
 /*
 * popup.js — lightweight status & control panel (F-1 / F-5; UI §3.1 / §3.2).
 *
-* Loads after storage.js (window.CCStorage). Pattern: status-at-a-glance +
-* progressive disclosure:
-*       - an on/off master switch (role="switch" aria-checked; Q2 profile flag),
-*       - a summary line "N terms active · last updated Xh ago" (aria-live polite),
-*       - a primary "Open settings" button -> chrome.runtime.openOptionsPage(),
-*       - a compact read-only preview of the first 3 active rules,
+ * Loads after storage.js (window.CCStorage). Pattern: status-at-a-glance +
+ * progressive disclosure:
+ *        - a per-site "Enable on this site" switch (role="switch" aria-checked),
+ *          which reveals a "Reload page" button when the site is toggled off so
+ *        the user can refresh a page whose replacements they just disabled,
+ *        - a summary line "N terms active · last updated Xh ago" (aria-live polite),
+ *        - a primary "Open settings" button -> chrome.runtime.openOptionsPage(),
+ *        - a compact read-only preview of the first 3 active rules,
 *       - on first install (F-5) the summary reads "N example rules loaded —
 *       edit or delete them in Settings" so the seeded defaults read as
-*       *suggestions*, not the user's own rules.
-*
-* Focus is set to the master switch on open (A6). Escape closes the popup (a small
-* fixed-width dialog with no unsaved edits here, A7). No jQuery; no per-element
-* binding.
-*/
+ *       *suggestions*, not the user's own rules.
+ *
+ * Escape closes the popup (a small fixed-width dialog with no unsaved edits, A7).
+ * No jQuery; no per-element binding.
+ */
 "use strict";
 
  (function () {
@@ -43,13 +44,7 @@
      return u.origin + "/*";
        }
 
-     // Keep the switch's visible "Replacements on/off" label in sync with its state.
-  function reflectLabel(on) {
-    var lbl = $id("cc-switch-text");
-    if (lbl) lbl.textContent = "Replacements " + (on ? "on" : "off");
-     }
-
-  function previewRows() {
+   function previewRows() {
     var active = S.state.rows.filter(function (r) {
       return r.enabled !== false && !!r.find;
        }).slice(0, 3);
@@ -60,19 +55,11 @@
 
   function render() {
     var active = S.state.rows.filter(function (r) {
-      return r.enabled !== false && !!r.find;
+       return r.enabled !== false && !!r.find;
       });
     var n = active.length;
 
-        // Master switch reflects the profile enabled flag (Q2) via aria-checked.
-      var sw = $id("cc-master");
-      if (sw) {
-        var on = S.state.enabled !== false;
-        sw.setAttribute("aria-checked", String(on));
-        reflectLabel(on);
-            }
-
-      // Summary line (A4 aria-live polite; F-5 example-rule copy on first install).
+       // Summary line (A4 aria-live polite; F-5 example-rule copy on first install).
     var summary = $id("cc-summary");
     if (summary) {
       if (S.state._seededExamples && n === S.state._seededExamples && !S.state.dirty) {
@@ -127,31 +114,48 @@
        // Per-site opt-in (contentCensorSites): reflect + toggle whether THIS tab's
        // origin is enabled. The background handler requests the host permission
        // and injects the content script; we only mirror enabled state here.
-   function renderSite() {
-     var row = $id("cc-site-row");
-     var note = $id("cc-site-note");
-     var unsupported = $id("cc-site-unsupported");
-     var sw = $id("cc-enable-site");
-     if (!row) return;                        // element not in this build (e.g. tests)
-     var site = siteFor(activeTab ? activeTab.url : null);
-     var isOn = !!site && enabledSites.indexOf(site) !== -1;
-     if (!site) {
-       row.hidden = true;
-       note.hidden = true;
-       unsupported.hidden = false;
-       return;
-         }
-     unsupported.hidden = true;
-     row.hidden = false;
-     note.hidden = isOn;
-     if (sw) {
-      sw.setAttribute("aria-checked", String(isOn));
-      var txt = $id("cc-enable-site-text");
-      if (txt) txt.textContent = isOn
-        ? "Enabled on this site"
-        : "Enable on this site";
-         }
-       }
+    function renderSite() {
+      var row = $id("cc-site-row");
+      var note = $id("cc-site-note");
+      var unsupported = $id("cc-site-unsupported");
+      var reload = $id("cc-reload");
+      var sw = $id("cc-enable-site");
+      if (!row) return;                         // element not in this build (e.g. tests)
+      var site = siteFor(activeTab ? activeTab.url : null);
+      var isOn = !!site && enabledSites.indexOf(site) !== -1;
+      if (!site) {
+        row.hidden = true;
+        note.hidden = true;
+        unsupported.hidden = false;
+        if (reload) reload.hidden = true;
+        return;
+           }
+      unsupported.hidden = true;
+      row.hidden = false;
+      note.hidden = isOn;
+        // When the site is off, its effect is inert in the live tab; offer a
+        // reload so the already-applied replacements clear on refresh.
+      if (reload) reload.hidden = isOn;
+      if (sw) {
+       sw.setAttribute("aria-checked", String(isOn));
+       var txt = $id("cc-enable-site-text");
+       if (txt) txt.textContent = isOn
+          ? "Enabled on this site"
+          : "Enable on this site";
+          }
+        }
+
+        // Reload the active tab so a just-disabled site shows clean (un-replaced)
+        // page content. Routed through the background, which keeps the popup's
+        // chrome.tabs surface free.
+    function reloadSite() {
+      var c = getChrome();
+      if (!c || !c.runtime || !c.runtime.sendMessage) return;
+      var tabId = activeTab && activeTab.id;
+      c.runtime.sendMessage({
+        type: "cc-reload", tabId: tabId != null ? tabId : null
+           }, function () { if (c.runtime) c.runtime.lastError; });
+        }
 
    function queryActiveTab() {
      var c = getChrome();
@@ -190,14 +194,12 @@
        }
 
   function init() {
-     if (_inited) return;                // P0-3: wire exactly once (idempotent)
-     _inited = true;
-     if (!S) return;
-     S.load(function () {
-       render();
-       var sw = $id("cc-master");
-       if (sw && sw.focus) sw.focus();       // focus on open (A6)
-            });
+      if (_inited) return;                 // P0-3: wire exactly once (idempotent)
+       _inited = true;
+      if (!S) return;
+      S.load(function () {
+        render();
+              });
 
      // Per-site opt-in: discover the active tab + the persisted enabled list.
      loadEnabledSites();
@@ -212,24 +214,18 @@
     if (c && c.storage && c.storage.onChanged) {
       c.storage.onChanged.addListener(function (changes, area) {
         if (area !== "sync") return;
-        if (changes.contentCensorData || changes.enabled) {
+        if (changes.contentCensorData) {
           if (!S.state.dirty) S.load(function () { render(); });
-          }
+            }
         if (changes.contentCensorSites) loadEnabledSites();
          });
           }
 
-       var sw = $id("cc-master");
-       if (sw) sw.addEventListener("click", function () {
-         var now = sw.getAttribute("aria-checked") !== "true";
-         sw.setAttribute("aria-checked", String(now));
-         reflectLabel(now);
-         S.setEnabled(now);
-         S.save();
-               });
+      var siteToggle = $id("cc-enable-site");
+      if (siteToggle) siteToggle.addEventListener("click", toggleSite);
 
-     var siteToggle = $id("cc-enable-site");
-     if (siteToggle) siteToggle.addEventListener("click", toggleSite);
+      var rl = $id("cc-reload");
+      if (rl) rl.addEventListener("click", reloadSite);
 
      var open = $id("cc-open-settings");
      if (open) open.addEventListener("click", function () {
@@ -268,10 +264,11 @@
           previewRows: previewRows,
           formatUpdated: formatUpdated,
           renderSite: renderSite,
-          siteFor: siteFor,
-          toggleSite: toggleSite,
-          loadEnabledSites: loadEnabledSites,
-          queryActiveTab: queryActiveTab
+           siteFor: siteFor,
+           toggleSite: toggleSite,
+           reloadSite: reloadSite,
+           loadEnabledSites: loadEnabledSites,
+           queryActiveTab: queryActiveTab
             };
         }
         )();

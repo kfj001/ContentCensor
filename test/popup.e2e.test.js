@@ -24,27 +24,18 @@ test("F-1 popup renders the active count + first-3 preview", async () => {
   assert.strictEqual(preview.querySelectorAll("li").length, 3, "preview caps at the first 3 rules");
 });
 
-// Q2 / A3: master switch toggles the profile enabled flag and saves it.
-test("F-1/Q2 master switch toggles enabled + persists (role=switch, aria-checked)", async () => {
+// The per-site reload button routes a "cc-reload" message to the background,
+// which reloads the active tab so a just-disabled site shows clean content.
+test("F-1 per-site reload button is present and wired", async () => {
   const r = await loadPopupPage({
      initial: {
        contentCensorData: [
-             { id: "a", find: "go", replace: "stop", matchType: "text", enabled: true }],
-       enabled: true }
-        });
-   const sw = r.document.getElementById("cc-master");
-     assert.strictEqual(sw.getAttribute("role"), "switch", "master is a role=switch (A3)");
-     assert.strictEqual(sw.getAttribute("aria-checked"), "true");
-
-        // Flip it off. A role="switch" <button> toggles on click via aria-checked
-        // (it has no .checked and never fires "change").
-      sw.click();
-     await settle(r.win, 8);
-     assert.strictEqual(sw.getAttribute("aria-checked"), "false", "click flips aria-checked");
-     assert.strictEqual(r.win.CCStorage.state.enabled, false, "toggling updates the flag");
-     assert.strictEqual(r.chrome._store.enabled, false, "enabled flag persisted (not wiped rules)");
-        // Rules are PRESERVED, not wiped (Q2).
-     assert.strictEqual(r.chrome._store.contentCensorData.length, 1, "rules preserved when disabled (Q2)");
+              { id: "a", find: "go", replace: "stop", matchType: "text", enabled: true }] }
+           });
+  const btn = r.document.getElementById("cc-reload");
+  assert.ok(btn, "a reload button is present in the popup");
+  assert.strictEqual(btn.getAttribute("type"), "button", "the reload control is a button");
+  assert.strictEqual(typeof r.api.reloadSite, "function", "popup exposes reloadSite");
 });
 
 // A7: Escape closes the popup when there are no unsaved edits.

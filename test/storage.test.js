@@ -89,12 +89,20 @@ test("save persists only enabled + non-empty-find rows", async () => {
   assert.strictEqual(saved[0].find, "keep");
 });
 
-test("setEnabled flips the profile flag and marks dirty", async () => {
-  global.chrome = makeChromeMock();
-  const S = loadStorage({ enabled: true });
-  S.load(() => {});
+test("load migrates rows and exposes no global enabled flag", async () => {
+  global.chrome = makeChromeMock({
+    contentCensorData: [{ find: "go", replace: "stop", enabled: true }],
+    enabled: true
+    });
+  const S = loadStorage({
+    contentCensorData: [{ find: "go", replace: "stop", enabled: true }],
+    enabled: true
+    });
+  let captured;
+  S.load((state) => { captured = state; });
   await run();
-  S.setEnabled(false);
-  assert.strictEqual(S.state.enabled, false);
-  assert.strictEqual(S.state.dirty, true);
+  assert.strictEqual(captured.rows.length, 1, "the rule migrated");
+  assert.strictEqual(captured.rows[0].find, "go");
+  assert.strictEqual(captured.enabled, undefined, "no global enabled flag is loaded");
+  assert.strictEqual(typeof S.setEnabled, "undefined", "setEnabled is gone (no global flag)");
 });
