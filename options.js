@@ -203,11 +203,11 @@ els.grid = byId("cc-grid");
      function forward(evt) {
         var rowEl = evt.target.closest ? evt.target.closest("cc-rule-row") : null;
         if (!rowEl) return;
-        if (evt.type === "cc-row-delete") {
+         if (evt.type === "cc-row-delete") {
           S.removeRow(evt.detail.rowId); S.markDirty(); render();
-            } else if (evt.type === "cc-row-change") {
-          readRow(rowEl); S.markDirty();
-            }
+           } else {
+          readRow(rowEl); S.markDirty(); updateStatus();
+           }
           }
     els.grid.addEventListener("input", forward);
     els.grid.addEventListener("change", forward);
